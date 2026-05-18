@@ -7,31 +7,14 @@ export default async function EinladenPage({ params }: { params: Promise<{ code:
   const { code } = await params
   const supabase = await createClient()
 
-  // Einladung laden
-  const { data: memberRaw } = await supabase
-    .from('group_members')
-    .select('*, groups(id, name, description)')
-    .eq('invite_code', code)
-    .single()
+  // Einladung laden via SECURITY DEFINER Funktion (umgeht RLS für anon-Nutzer)
+  const { data: rows } = await supabase.rpc('get_invite_info', { p_code: code })
+  const invite = rows?.[0] ?? null
 
-  interface MemberWithGroup {
-    id: string
-    group_id: string
-    user_id: string | null
-    email: string
-    status: 'pending' | 'active'
-    invite_code: string
-    invited_by: string | null
-    joined_at: string | null
-    groups?: { id: string; name: string; description: string | null } | null
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const member = memberRaw as any as MemberWithGroup | null
+  if (!invite) notFound()
 
-  if (!member) notFound()
-  if (member.status === 'active') {
-    // Bereits aktiv → direkt zur Gruppe
-    redirect(`/gruppen/${member.group_id}`)
+  if (invite.member_status === 'active') {
+    redirect(`/gruppen/${invite.group_id}`)
   }
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -45,14 +28,14 @@ export default async function EinladenPage({ params }: { params: Promise<{ code:
       joined_at: new Date().toISOString(),
     }).eq('invite_code', code)
 
-    redirect(`/gruppen/${member.group_id}`)
+    redirect(`/gruppen/${invite.group_id}`)
   }
 
   // Nicht eingeloggt → Landing Page anzeigen
   return (
     <EinladenClient
-      groupName={member.groups?.name ?? 'Gruppe'}
-      groupDescription={member.groups?.description ?? null}
+      groupName={invite.group_name ?? 'Gruppe'}
+      groupDescription={invite.group_description ?? null}
       inviteCode={code}
     />
   )
