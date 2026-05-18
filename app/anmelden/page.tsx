@@ -1,4 +1,4 @@
-'use client'
+ï»¿'use client'
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -21,19 +21,16 @@ function AnmeldenForm() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-
     if (error) {
       setError('E-Mail oder Passwort falsch.')
       setLoading(false)
       return
     }
-
     const invite = searchParams.get('invite')
     if (invite) {
-      router.push(`/einladen/${invite}`)
+      router.push(/einladen/+invite)
     } else {
       router.push('/verfuegbarkeit')
     }
@@ -45,47 +42,27 @@ function AnmeldenForm() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/40">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">?? Terminfinder</CardTitle>
+          <CardTitle className="text-2xl">Terminfinder</CardTitle>
           <CardDescription>Melde dich an, um deine Spieleabende zu planen</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="email">E-Mail</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="du@beispiel.de"
-                required
-                autoComplete="email"
-              />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@beispiel.de" required autoComplete="email" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">Passwort</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
             </div>
-            {error && (
-              <p className="text-sm text-destructive">{error}</p>
-            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Anmelden…' : 'Anmelden'}
+              {loading ? 'Anmelden...' : 'Anmelden'}
             </Button>
           </form>
           <p className="text-center text-sm text-muted-foreground mt-4">
             Noch kein Konto?{' '}
-            <Link
-              href={`/registrieren${invite ? `?invite=${invite}` : ''}`}
-              className="underline underline-offset-4"
-            >
+            <Link href={invite ? /registrieren?invite=+invite : '/registrieren'} className="underline underline-offset-4">
               Registrieren
             </Link>
           </p>
