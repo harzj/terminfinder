@@ -20,16 +20,12 @@ export default async function EinladenPage({ params }: { params: Promise<{ code:
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Wenn eingeloggt → direkt beitreten
+  // Wenn eingeloggt → Invite annehmen via SECURITY DEFINER Funktion
   if (user) {
-    await supabase.from('group_members').update({
-      user_id: user.id,
-      email: user.email!,
-      status: 'active',
-      joined_at: new Date().toISOString(),
-    }).eq('invite_code', code)
-
-    redirect(`/gruppen/${invite.group_id}`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: groupId } = await (supabase as any).rpc('accept_invite', { p_code: code })
+    const targetGroupId = groupId ?? invite.group_id
+    redirect(`/gruppen/${targetGroupId}`)
   }
 
   // Nicht eingeloggt → Landing Page anzeigen
