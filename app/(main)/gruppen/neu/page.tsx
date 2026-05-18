@@ -34,13 +34,13 @@ export default function NeueGruppePage() {
       .single()
 
     if (groupError || !group) {
-      setError('Gruppe konnte nicht erstellt werden.')
+      setError(`Gruppe konnte nicht erstellt werden: ${groupError?.message ?? 'Unbekannter Fehler'} (Code: ${groupError?.code ?? '-'})`)
       setLoading(false)
       return
     }
 
-    // Ersteller direkt als aktives Mitglied hinzufügen
-    await supabase.from('group_members').insert({
+    // Ersteller als aktives Mitglied eintragen (Fallback falls Trigger nicht greift)
+    const { error: memberError } = await supabase.from('group_members').insert({
       group_id: group.id,
       user_id: user.id,
       email: user.email!,
@@ -48,6 +48,12 @@ export default function NeueGruppePage() {
       invited_by: user.id,
       joined_at: new Date().toISOString(),
     })
+    if (memberError && memberError.code !== '23505') {
+      // 23505 = unique violation = Trigger hat bereits eingefügt, kein echtes Problem
+      setError(`Mitglied konnte nicht eingetragen werden: ${memberError.message} (Code: ${memberError.code})`)
+      setLoading(false)
+      return
+    }
 
     router.push(`/gruppen/${group.id}`)
   }

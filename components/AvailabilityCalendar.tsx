@@ -1,7 +1,7 @@
-'use client'
+﻿'use client'
 
-import { useState, useCallback } from 'react'
-import { format, addDays, startOfToday, isSameDay, parseISO } from 'date-fns'
+import { useState, useCallback, useRef } from 'react'
+import { format, addDays, isSameDay, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -23,15 +23,16 @@ export interface ConfirmedEvent {
 }
 
 interface AvailabilityCalendarProps {
+  startDate: string
   availability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
   onSave: (day: DayAvailability) => Promise<void>
   onDelete: (date: string) => Promise<void>
 }
 
-const HOURS_DEFAULT = Array.from({ length: 10 }, (_, i) => i + 15) // 15–24
-const HOURS_EXTENDED = Array.from({ length: 25 }, (_, i) => i) // 0–24
-const HALF_HOURS_EXTENDED = Array.from({ length: 49 }, (_, i) => i * 30) // 0–24 in 30min
+const HOURS_DEFAULT = Array.from({ length: 10 }, (_, i) => i + 15)
+const HOURS_EXTENDED = Array.from({ length: 25 }, (_, i) => i)
+const HALF_HOURS_EXTENDED = Array.from({ length: 49 }, (_, i) => i * 30)
 
 function formatHour(h: number) {
   return `${String(h).padStart(2, '0')}:00`
@@ -47,46 +48,44 @@ const STATUS_COLORS: Record<string, string> = {
   uncertain: 'bg-yellow-400 text-black',
 }
 
+const LONG_PRESS_MS = 500
+
 export default function AvailabilityCalendar({
+  startDate,
   availability,
   confirmedEvents,
   onSave,
   onDelete,
 }: AvailabilityCalendarProps) {
-  const today = startOfToday()
+  const today = parseISO(startDate)
   const days = Array.from({ length: 28 }, (_, i) => addDays(today, i))
 
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [sheetDate, setSheetDate] = useState<Date | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  // Editor-State
-  const [status, setStatus] = useState<AvailabilityStatus>(null)
   const [fromTime, setFromTime] = useState<string | null>(null)
   const [untilTime, setUntilTime] = useState<string | null>(null)
   const [extendedHours, setExtendedHours] = useState(false)
   const [halfHours, setHalfHours] = useState(false)
+  const [pendingDate, setPendingDate] = useState<string | null>(null)
+
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFired = useRef(false)
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null)
 
   const getAvailability = useCallback(
-    (date: Date): DayAvailability | undefined => {
-      const dateStr = format(date, 'yyyy-MM-dd')
-      return availability.find((a) => a.date === dateStr)
-    },
+    (date: Date) => availability.find((a) => a.date === format(date, 'yyyy-MM-dd')),
     [availability]
   )
 
   const getConfirmedEvent = useCallback(
-    (date: Date): ConfirmedEvent | undefined => {
-      const dateStr = format(date, 'yyyy-MM-dd')
-      return confirmedEvents.find((e) => e.date === dateStr)
-    },
+    (date: Date) => confirmedEvents.find((e) => e.date === format(date, 'yyyy-MM-dd')),
     [confirmedEvents]
   )
 
   const openSheet = (date: Date) => {
     const avail = getAvailability(date)
-    setSelectedDate(date)
-    setStatus(avail?.status ?? null)
+    setSheetDate(date)
     setFromTime(avail?.from_time ?? null)
     setUntilTime(avail?.until_time ?? null)
     setExtendedHours(false)
@@ -94,31 +93,89 @@ export default function AvailabilityCalendar({
     setSheetOpen(true)
   }
 
-  const handleSave = async () => {
-    if (!selectedDate) return
-    setSaving(true)
-    const dateStr = format(selectedDate, 'yyyy-MM-dd')
-
-    if (status === null) {
-      await onDelete(dateStr)
-    } else {
-      await onSave({ date: dateStr, status, from_time: fromTime, until_time: untilTime })
+  const cycleTap = async (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd')
+    if (pendingDate === dateStr) return
+    setPendingDate(dateStr)
+    const avail = getAvailability(date)
+    try {
+      if (!avail) {
+        await onSave({ date: dateStr, status: 'available', from_time: null, until_time: null })
+      } else if (avail.status === 'available') {
+        await onSave({ date: dateStr, status: 'uncertain', from_time: avail.from_time, until_time: avail.until_time })
+      } else {
+        await onDelete(dateStr)
+      }
+    } finally {
+      setPendingDate(null)
     }
+  }
+
+  const handlePointerDown = (date: Date, e: React.PointerEvent) => {
+    if (getConfirmedEvent(date)) return
+    longPressFired.current = false
+    pointerDownPos.current = { x: e.clientX, y: e.clientY }
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true
+      openSheet(date)
+    }, LONG_PRESS_MS)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerDownPos.current || !longPressTimer.current) return
+    const dx = Math.abs(e.clientX - pointerDownPos.current.x)
+    const dy = Math.abs(e.clientY - pointerDownPos.current.y)
+    if (dx > 8 || dy > 8) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  const handlePointerUp = (date: Date) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    if (!longPressFired.current) cycleTap(date)
+    pointerDownPos.current = null
+  }
+
+  const handlePointerCancel = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+    pointerDownPos.current = null
+  }
+
+  const handleSheetSave = async () => {
+    if (!sheetDate) return
+    setSaving(true)
+    const dateStr = format(sheetDate, 'yyyy-MM-dd')
+    const currentStatus = getAvailability(sheetDate)?.status ?? 'available'
+    await onSave({ date: dateStr, status: currentStatus, from_time: fromTime, until_time: untilTime })
+    setSaving(false)
+    setSheetOpen(false)
+  }
+
+  const handleSheetDelete = async () => {
+    if (!sheetDate) return
+    setSaving(true)
+    await onDelete(format(sheetDate, 'yyyy-MM-dd'))
     setSaving(false)
     setSheetOpen(false)
   }
 
   const timeOptions = halfHours
-    ? HALF_HOURS_EXTENDED.map((m) => formatHalfHour(m))
+    ? HALF_HOURS_EXTENDED.map(formatHalfHour)
     : extendedHours
       ? HOURS_EXTENDED.map(formatHour)
       : HOURS_DEFAULT.map(formatHour)
 
-  // Kalender in Wochen aufteilen
   const weeks: Date[][] = []
-  for (let i = 0; i < 28; i += 7) {
-    weeks.push(days.slice(i, i + 7))
-  }
+  for (let i = 0; i < 28; i += 7) weeks.push(days.slice(i, i + 7))
+
+  const sheetAvail = sheetDate ? getAvailability(sheetDate) : undefined
 
   return (
     <>
@@ -130,20 +187,28 @@ export default function AvailabilityCalendar({
                 const avail = getAvailability(day)
                 const event = getConfirmedEvent(day)
                 const isToday = isSameDay(day, today)
+                const dateStr = format(day, 'yyyy-MM-dd')
+                const isPending = pendingDate === dateStr
 
                 return (
                   <button
                     key={day.toISOString()}
-                    onClick={() => !event && openSheet(day)}
+                    disabled={!!event || isPending}
+                    onPointerDown={(e) => handlePointerDown(day, e)}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={() => handlePointerUp(day)}
+                    onPointerCancel={handlePointerCancel}
+                    onContextMenu={(e) => e.preventDefault()}
                     className={cn(
-                      'relative flex flex-col items-center justify-center rounded-lg p-1 aspect-square text-xs font-medium transition-all',
+                      'relative flex flex-col items-center justify-center rounded-lg p-1 aspect-square text-xs font-medium transition-all select-none touch-none',
                       'border border-border',
                       isToday && 'ring-2 ring-primary ring-offset-1',
+                      isPending && 'opacity-50',
                       event
                         ? 'bg-blue-100 text-blue-800 cursor-default'
                         : avail?.status
                           ? STATUS_COLORS[avail.status]
-                          : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                          : 'bg-muted text-muted-foreground active:opacity-60'
                     )}
                   >
                     <span className="text-[10px] leading-none">
@@ -167,134 +232,72 @@ export default function AvailabilityCalendar({
         ))}
       </div>
 
-      {/* Legende */}
       <div className="flex flex-wrap gap-3 mt-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-green-500 inline-block" /> Kann
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-yellow-400 inline-block" /> Unklar
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-muted border border-border inline-block" /> Kann nicht
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded bg-blue-100 inline-block" /> Gesperrt
-        </span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500 inline-block" /> 1x Kann</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-400 inline-block" /> 2x Unklar</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted border border-border inline-block" /> 3x Nein</span>
+        <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Gebucht</span>
       </div>
+      <p className="text-xs text-muted-foreground mt-1">Lang drücken → Uhrzeiten einstellen</p>
 
-      {/* Bottom Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl pb-8">
           <SheetHeader>
             <SheetTitle>
-              {selectedDate &&
-                format(selectedDate, 'EEEE, d. MMMM', { locale: de })}
+              {sheetDate && format(sheetDate, 'EEEE, d. MMMM', { locale: de })}
+              {sheetAvail?.status === 'available' && <span className="ml-2 text-sm text-green-600 font-normal">Kann</span>}
+              {sheetAvail?.status === 'uncertain' && <span className="ml-2 text-sm text-yellow-600 font-normal">Unklar</span>}
             </SheetTitle>
           </SheetHeader>
-
           <div className="mt-6 space-y-5">
-            {/* 3-Wege-Toggle */}
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => setStatus('available')}
-                className={cn(
-                  'rounded-xl p-3 text-sm font-medium border-2 transition-all',
-                  status === 'available'
-                    ? 'bg-green-500 text-white border-green-600'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                )}
-              >
-                ✓ Kann
-              </button>
-              <button
-                onClick={() => setStatus('uncertain')}
-                className={cn(
-                  'rounded-xl p-3 text-sm font-medium border-2 transition-all',
-                  status === 'uncertain'
-                    ? 'bg-yellow-400 text-black border-yellow-500'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                )}
-              >
-                ? Unklar
-              </button>
-              <button
-                onClick={() => setStatus(null)}
-                className={cn(
-                  'rounded-xl p-3 text-sm font-medium border-2 transition-all',
-                  status === null
-                    ? 'bg-red-100 text-red-700 border-red-300'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                )}
-              >
-                ✗ Nein
-              </button>
-            </div>
-
-            {/* Zeitauswahl (nur bei Kann oder Unklar) */}
-            {status !== null && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Von</label>
-                    <select
-                      value={fromTime ?? ''}
-                      onChange={(e) => setFromTime(e.target.value || null)}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Beliebig</option>
-                      {timeOptions.map((t) => (
-                        <option key={t} value={t}>{t} Uhr</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Bis</label>
-                    <select
-                      value={untilTime ?? ''}
-                      onChange={(e) => setUntilTime(e.target.value || null)}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Beliebig</option>
-                      {timeOptions.map((t) => (
-                        <option key={t} value={t}>{t} Uhr</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Erweiterte Zeiten */}
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={extendedHours}
-                      onChange={(e) => {
-                        setExtendedHours(e.target.checked)
-                        if (!e.target.checked) setHalfHours(false)
-                      }}
-                      className="rounded"
-                    />
-                    Alle Uhrzeiten (0–24 Uhr)
-                  </label>
-                  {extendedHours && (
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={halfHours}
-                        onChange={(e) => setHalfHours(e.target.checked)}
-                        className="rounded"
-                      />
-                      Halbstunden anzeigen
-                    </label>
-                  )}
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Von</label>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  value={fromTime ?? ''}
+                  onChange={(e) => setFromTime(e.target.value || null)}
+                >
+                  <option value="">Beliebig</option>
+                  {timeOptions.map((t) => <option key={t} value={t}>{t} Uhr</option>)}
+                </select>
               </div>
-            )}
-
-            <Button onClick={handleSave} disabled={saving} className="w-full">
-              {saving ? 'Speichern…' : 'Speichern'}
-            </Button>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Bis</label>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  value={untilTime ?? ''}
+                  onChange={(e) => setUntilTime(e.target.value || null)}
+                >
+                  <option value="">Beliebig</option>
+                  {timeOptions.map((t) => <option key={t} value={t}>{t} Uhr</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={extendedHours}
+                  onChange={(e) => { setExtendedHours(e.target.checked); if (!e.target.checked) setHalfHours(false) }}
+                  className="rounded" />
+                0-24h
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" checked={halfHours}
+                  onChange={(e) => { setHalfHours(e.target.checked); setExtendedHours(true) }}
+                  className="rounded" />
+                Halbe Stunden
+              </label>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={handleSheetSave} disabled={saving} className="flex-1">
+                {saving ? 'Speichern...' : 'Speichern'}
+              </Button>
+              {sheetAvail && (
+                <Button variant="destructive" onClick={handleSheetDelete} disabled={saving}>
+                  Löschen
+                </Button>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

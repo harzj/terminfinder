@@ -7,15 +7,18 @@ import { useRouter } from 'next/navigation'
 
 interface Props {
   userId: string
+  startDate: string
   initialAvailability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
 }
 
-export default function VerfuegbarkeitClient({ userId, initialAvailability, confirmedEvents }: Props) {
+export default function VerfuegbarkeitClient({ userId, startDate, initialAvailability, confirmedEvents }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const router = useRouter()
 
   const handleSave = async (day: DayAvailability) => {
+    setSaveError(null)
     const supabase = createClient()
     const { data, error } = await supabase
       .from('availability')
@@ -31,6 +34,8 @@ export default function VerfuegbarkeitClient({ userId, initialAvailability, conf
         const next = prev.filter((a) => a.date !== day.date)
         return [...next, { date: data.date, status: data.status, from_time: data.from_time, until_time: data.until_time }]
       })
+    } else if (error) {
+      setSaveError(`Speichern fehlgeschlagen: ${error.message} (Code: ${error.code})`)
     }
   }
 
@@ -41,11 +46,19 @@ export default function VerfuegbarkeitClient({ userId, initialAvailability, conf
   }
 
   return (
-    <AvailabilityCalendar
+    <>
+      {saveError && (
+        <div className="mb-3 rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
+          {saveError}
+        </div>
+      )}
+      <AvailabilityCalendar
+      startDate={startDate}
       availability={availability}
       confirmedEvents={confirmedEvents}
       onSave={handleSave}
       onDelete={handleDelete}
     />
+    </>
   )
 }

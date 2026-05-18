@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { format, parseISO } from 'date-fns'
+import { de } from 'date-fns/locale'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,13 +17,14 @@ interface Props {
   members: any[]
   availabilities: any[]
   events: any[]
+  pastEvents: any[]
   currentUserId: string
   startDate: string
   endDate: string
 }
 
 export default function GruppenDetailClient({
-  group, members, availabilities, events, currentUserId, startDate, endDate
+  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate
 }: Props) {
   const votingCount = events.filter((e: any) => e.status === 'voting').length
 
@@ -58,6 +61,9 @@ export default function GruppenDetailClient({
           <TabsTrigger value="naechste" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary py-3">
             Nächste
           </TabsTrigger>
+          <TabsTrigger value="archiv" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary py-3">
+            Archiv
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="uebersicht" className="p-4 mt-0">
@@ -88,6 +94,31 @@ export default function GruppenDetailClient({
             endDate={endDate}
             currentUserId={currentUserId}
           />
+        </TabsContent>
+
+        <TabsContent value="archiv" className="p-4 mt-0">
+          {pastEvents.length === 0 ? (
+            <p className="text-center text-sm text-muted-foreground py-10">Noch keine vergangenen Termine.</p>
+          ) : (
+            <div className="space-y-3">
+              {pastEvents.map((event: any) => {
+                const accepted = (event.event_responses ?? []).filter((r: any) => r.response === 'accepted').length
+                return (
+                  <div key={event.id} className="rounded-lg border border-border p-3">
+                    <p className="font-medium text-sm">
+                      {format(parseISO(event.proposed_date), 'EEEE, d. MMMM yyyy', { locale: de })}
+                    </p>
+                    {event.from_time && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1">{accepted} Zusagen</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

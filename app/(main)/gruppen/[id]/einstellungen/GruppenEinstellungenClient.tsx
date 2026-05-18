@@ -25,6 +25,8 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
   const [copied, setCopied] = useState<string | null>(null)
   const [minParticipants, setMinParticipants] = useState(group.min_participants)
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Invite-Link eines Mitglieds kopieren
   const copyLink = (code: string) => {
@@ -34,17 +36,33 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
     setTimeout(() => setCopied(null), 2000)
   }
 
-  // Neuen Link-Code generieren (für den Owner → eigener group_members-Eintrag mit pending)
+  // Allgemeinen Einladungslink erzeugen oder bestehenden abrufen
   const generateInviteLink = async () => {
     const supabase = createClient()
     const { data } = await supabase
       .from('group_members')
-      .insert({ group_id: group.id, email: '__link__', status: 'pending', invited_by: currentUserId })
-      .select()
+      .upsert(
+        { group_id: group.id, email: '__link__', status: 'pending', invited_by: currentUserId },
+        { onConflict: 'group_id,email', ignoreDuplicates: false }
+      )
+      .select('invite_code')
       .single()
     if (data) {
       copyLink(data.invite_code)
       router.refresh()
+    }
+  }
+
+  // Gruppe löschen
+  const handleDeleteGroup = async () => {
+    setDeleting(true)
+    const supabase = createClient()
+    const { error } = await supabase.from('groups').delete().eq('id', group.id)
+    if (!error) {
+      router.push('/gruppen')
+    } else {
+      setDeleting(false)
+      setConfirmDelete(false)
     }
   }
 
@@ -121,19 +139,17 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
       <Card>
         <CardHeader><CardTitle className="text-base">Einladen</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Einladungslink generieren:</p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Allgemeiner Link – jeder mit dem Link kann beitreten:</p>
             <Button onClick={generateInviteLink} variant="outline" className="w-full">
-              <Copy className="h-4 w-4 mr-2" /> Link erstellen & kopieren
+              <Copy className="h-4 w-4 mr-2" /> Link kopieren
             </Button>
           </div>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-2 text-muted-foreground text-xs">oder</div>
-            <div className="border-t border-border my-2" />
-          </div>
+          <div className="border-t border-border" />
           <form onSubmit={handleInviteByEmail} className="space-y-2">
-            <Label htmlFor="email">Per E-Mail einladen</Label>
-            <div className="flex gap-2">
+            <Label htmlFor="email">Für bestimmte Person einladen</Label>
+            {/* suppressHydrationWarning: Passwort-Manager-Extensions injizieren style + button */}
+            <div className="flex gap-2" suppressHydrationWarning>
               <Input
                 id="email"
                 type="email"
@@ -141,11 +157,13 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
                 onChange={(e) => setInviteEmail(e.target.value)}
                 placeholder="person@beispiel.de"
                 required
+                suppressHydrationWarning
               />
               <Button type="submit" disabled={inviting} size="sm">
                 <UserPlus className="h-4 w-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">Es wird keine E-Mail versendet – kopiere den Link aus der Mitgliederliste und schicke ihn selbst.</p>
             {inviteError && <p className="text-xs text-destructive">{inviteError}</p>}
           </form>
         </CardContent>
@@ -182,6 +200,30 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
               </div>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      {/* Gefahrenzone */}
+      <Card className="border-destructive/30">
+        <CardHeader><CardTitle className="text-base text-destructive">Gefahrenzone</CardTitle></CardHeader>
+        <CardContent>
+          {!confirmDelete ? (
+            <Button variant="destructive" onClick={() => setConfirmDelete(true)} className="w-full">
+              <Trash2 className="h-4 w-4 mr-2" /> Gruppe löschen
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-destructive font-medium">Wirklich löschen? Alle Daten gehen verloren.</p>
+              <div className="flex gap-2">
+                <Button variant="destructive" onClick={handleDeleteGroup} disabled={deleting} className="flex-1">
+                  {deleting ? 'Wird gelöscht…' : 'Ja, löschen'}
+                </Button>
+                <Button variant="outline" onClick={() => setConfirmDelete(false)} className="flex-1">
+                  Abbrechen
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

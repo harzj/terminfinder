@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Plus, Users, ChevronRight } from 'lucide-react'
+import DemoGruppeButton from './DemoGruppeButton'
 
 export default async function GruppenPage() {
   const supabase = await createClient()
@@ -12,12 +13,20 @@ export default async function GruppenPage() {
 
   const { data: memberships } = await supabase
     .from('group_members')
-    .select('groups(id, name, description, min_participants, created_by)')
+    .select('group_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
 
-  const groups = (memberships ?? [])
-    .flatMap((m: any) => m.groups ? [m.groups] : [])
+  const groupIds = (memberships ?? []).map((m: any) => m.group_id)
+
+  const { data: groupData } = groupIds.length > 0
+    ? await supabase
+        .from('groups')
+        .select('id, name, description, min_participants, created_by')
+        .in('id', groupIds)
+    : { data: [] as any[] }
+
+  const groups = groupData ?? []
 
   return (
     <div className="p-4 max-w-lg mx-auto">
@@ -33,9 +42,12 @@ export default async function GruppenPage() {
           <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p className="font-medium">Noch keine Gruppen</p>
           <p className="text-sm mt-1">Erstelle eine Gruppe oder nimm eine Einladung an.</p>
-          <Link href="/gruppen/neu" className={buttonVariants({ className: 'mt-4' })}>
-            Gruppe erstellen
-          </Link>
+          <div className="flex flex-col items-center gap-2 mt-4">
+            <Link href="/gruppen/neu" className={buttonVariants()}>
+              Gruppe erstellen
+            </Link>
+            <DemoGruppeButton />
+          </div>
         </div>
       ) : (
         <div className="space-y-3">

@@ -43,6 +43,7 @@ export default async function VerfuegbarkeitPage() {
       </p>
       <VerfuegbarkeitClient
         userId={user.id}
+        startDate={today.toISOString().split('T')[0]}
         initialAvailability={availability ?? []}
         confirmedEvents={events}
       />

@@ -26,12 +26,23 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
 
   if (!group) notFound()
 
-  // Mitglieder laden
-  const { data: members } = await supabase
+  // Mitglieder laden (getrennte Queries wegen RLS + nested join Problem)
+  const { data: rawMembers } = await supabase
     .from('group_members')
-    .select('user_id, email, status, profiles(display_name)')
+    .select('user_id, email, status')
     .eq('group_id', id)
     .eq('status', 'active')
+
+  const memberIds = (rawMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
+
+  const { data: profileData } = memberIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name').in('id', memberIds)
+    : { data: [] as any[] }
+  const profileMap = new Map((profileData ?? []).map((p: any) => [p.id, p]))
+  const members = (rawMembers ?? []).map((m: any) => ({
+    ...m,
+    profiles: profileMap.get(m.user_id) ?? null,
+  }))
 
   // Verfügbarkeiten aller Mitglieder für nächste 28 Tage
   const today = new Date()
@@ -41,11 +52,9 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   const todayStr = today.toISOString().split('T')[0]
   const endStr = endDate.toISOString().split('T')[0]
 
-  const memberIds = (members ?? []).map((m: any) => m.user_id).filter(Boolean)
-
   const { data: availabilities } = await supabase
     .from('availability')
-    .select('*, profiles(display_name)')
+    .select('user_id, date, status, from_time, until_time')
     .in('user_id', memberIds)
     .gte('date', todayStr)
     .lte('date', endStr)
@@ -59,12 +68,23 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
     .gte('proposed_date', todayStr)
     .order('proposed_date')
 
+  // Vergangene bestätigte Termine (Archiv)
+  const { data: pastEvents } = await supabase
+    .from('events')
+    .select('id, proposed_date, from_time, until_time, event_responses(response)')
+    .eq('group_id', id)
+    .eq('status', 'confirmed')
+    .lt('proposed_date', todayStr)
+    .order('proposed_date', { ascending: false })
+    .limit(30)
+
   return (
     <GruppenDetailClient
       group={group}
       members={members ?? []}
       availabilities={availabilities ?? []}
       events={events ?? []}
+      pastEvents={pastEvents ?? []}
       currentUserId={user.id}
       startDate={todayStr}
       endDate={endStr}
