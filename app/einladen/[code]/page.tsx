@@ -14,7 +14,11 @@ export default async function EinladenPage({ params }: { params: Promise<{ code:
 
   if (!invite) notFound()
 
-  if (invite.member_status === 'active') {
+  // Allgemeiner Link (__link__) läuft nie ab und ist wiederverwendbar
+  const isGeneralLink = invite.member_email === '__link__'
+
+  // Email-spezifischer Invite der bereits angenommen wurde → direkt weiter
+  if (!isGeneralLink && invite.member_status === 'active') {
     redirect(`/gruppen/${invite.group_id}`)
   }
 
