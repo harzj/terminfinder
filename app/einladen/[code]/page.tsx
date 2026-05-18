@@ -8,7 +8,8 @@ export default async function EinladenPage({ params }: { params: Promise<{ code:
   const supabase = await createClient()
 
   // Einladung laden via SECURITY DEFINER Funktion (umgeht RLS für anon-Nutzer)
-  const { data: rows } = await supabase.rpc('get_invite_info', { p_code: code })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: rows } = await (supabase as any).rpc('get_invite_info', { p_code: code })
   const invite = rows?.[0] ?? null
 
   if (!invite) notFound()
