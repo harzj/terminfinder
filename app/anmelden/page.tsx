@@ -62,7 +62,7 @@ function AnmeldenForm() {
           </form>
           <p className="text-center text-sm text-muted-foreground mt-4">
             Noch kein Konto?{' '}
-            <Link href={invite ? /registrieren?invite=+invite : '/registrieren'} className="underline underline-offset-4">
+            <Link href={invite ? '/registrieren?invite=' + invite : '/registrieren'} className="underline underline-offset-4">
               Registrieren
             </Link>
           </p>
