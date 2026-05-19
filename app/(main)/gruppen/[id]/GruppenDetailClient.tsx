@@ -20,10 +20,11 @@ interface Props {
   currentUserId: string
   startDate: string
   endDate: string
+  blockedDates: string[]
 }
 
 export default function GruppenDetailClient({
-  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate
+  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates
 }: Props) {
   const votingCount = events.filter((e: any) => e.status === 'voting').length
 
@@ -93,6 +94,7 @@ export default function GruppenDetailClient({
             endDate={endDate}
             currentUserId={currentUserId}
             events={events}
+            blockedDates={blockedDates}
           />
         </TabsContent>
 

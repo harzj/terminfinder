@@ -68,6 +68,22 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
     .gte('proposed_date', todayStr)
     .order('proposed_date')
 
+  // Blockierte Tage: bestätigte Events in ANDEREN Gruppen, bei denen der User dabei ist
+  const { data: acceptedElsewhere } = await supabase
+    .from('event_responses')
+    .select('events!inner(group_id, proposed_date, status)')
+    .eq('user_id', user.id)
+    .eq('response', 'accepted')
+  const blockedDates = (acceptedElsewhere ?? [])
+    .filter((r: any) =>
+      r.events &&
+      r.events.group_id !== id &&
+      r.events.status === 'confirmed' &&
+      r.events.proposed_date >= todayStr &&
+      r.events.proposed_date <= endStr
+    )
+    .map((r: any) => r.events.proposed_date as string)
+
   // Vergangene bestätigte Termine (Archiv)
   const { data: pastEvents } = await supabase
     .from('events')
@@ -88,6 +104,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
       currentUserId={user.id}
       startDate={todayStr}
       endDate={endStr}
+      blockedDates={blockedDates}
     />
   )
 }

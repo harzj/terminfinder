@@ -19,9 +19,10 @@ interface Props {
   endDate: string
   currentUserId: string
   events: any[]  // bereits vorgeschlagene / bestätigte Events dieser Gruppe
+  blockedDates?: string[]  // Tage mit bestätigten Events in anderen Gruppen
 }
 
-export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events }: Props) {
+export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events, blockedDates }: Props) {
   const router = useRouter()
   const [proposing, setProposing] = useState<string | null>(null)
 
@@ -30,6 +31,9 @@ export default function NaechsteTermine({ group, availabilities, members, startD
     () => new Set((events ?? []).map((e: any) => e.proposed_date as string)),
     [events]
   )
+
+  // Blockierte Tage: bestätigte Termine in anderen Gruppen des Nutzers
+  const blockedDateSet = useMemo(() => new Set(blockedDates ?? []), [blockedDates])
 
   const overlaps = useMemo(() => {
     const memberProfiles = members.map((m: any) => ({
@@ -49,8 +53,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
       group.min_participants,
       parseISO(startDate),
       parseISO(endDate)
-    ).filter(o => !existingEventDates.has(o.date)).slice(0, 10)
-  }, [availabilities, members, group.min_participants, startDate, endDate, existingEventDates])
+    ).filter(o => !existingEventDates.has(o.date) && !blockedDateSet.has(o.date)).slice(0, 10)
+  }, [availabilities, members, group.min_participants, startDate, endDate, existingEventDates, blockedDateSet])
 
   const handlePropose = async (overlap: typeof overlaps[0]) => {
     setProposing(overlap.date)
