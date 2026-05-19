@@ -174,6 +174,36 @@ export interface Database {
         }
         Relationships: []
       }
+      event_games: {
+        Row: {
+          id: string
+          event_id: string
+          bgg_id: number
+          name: string
+          thumbnail_url: string | null
+          added_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          bgg_id: number
+          name: string
+          thumbnail_url?: string | null
+          added_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          bgg_id?: number
+          name?: string
+          thumbnail_url?: string | null
+          added_by?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       calendar_connections: {
         Row: {
           id: string

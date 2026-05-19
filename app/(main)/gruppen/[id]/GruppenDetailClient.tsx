@@ -1,8 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { format, parseISO } from 'date-fns'
-import { de } from 'date-fns/locale'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +9,7 @@ import Link from 'next/link'
 import GruppenUebersicht from '@/components/GruppenUebersicht'
 import Abstimmungen from '@/components/Abstimmungen'
 import NaechsteTermine from '@/components/NaechsteTermine'
+import Archiv from '@/components/Archiv'
 
 interface Props {
   group: any
@@ -97,28 +96,7 @@ export default function GruppenDetailClient({
         </TabsContent>
 
         <TabsContent value="archiv" className="p-4 mt-0">
-          {pastEvents.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-10">Noch keine vergangenen Termine.</p>
-          ) : (
-            <div className="space-y-3">
-              {pastEvents.map((event: any) => {
-                const accepted = (event.event_responses ?? []).filter((r: any) => r.response === 'accepted').length
-                return (
-                  <div key={event.id} className="rounded-lg border border-border p-3">
-                    <p className="font-medium text-sm">
-                      {format(parseISO(event.proposed_date), 'EEEE, d. MMMM yyyy', { locale: de })}
-                    </p>
-                    {event.from_time && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">{accepted} Zusagen</p>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <Archiv pastEvents={pastEvents} currentUserId={currentUserId} />
         </TabsContent>
       </Tabs>
     </div>

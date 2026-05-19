@@ -71,7 +71,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   // Vergangene bestätigte Termine (Archiv)
   const { data: pastEvents } = await supabase
     .from('events')
-    .select('id, proposed_date, from_time, until_time, event_responses(response)')
+    .select('id, proposed_date, from_time, until_time, event_responses(response), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
     .eq('status', 'confirmed')
     .lt('proposed_date', todayStr)
