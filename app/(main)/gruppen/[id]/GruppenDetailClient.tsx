@@ -101,6 +101,7 @@ export default function GruppenDetailClient({
             currentUserId={currentUserId}
             events={events}
             blockedDates={blockedDates}
+            bggCollection={bggCollection}
           />
         </TabsContent>
 
