@@ -139,6 +139,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<BggResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [bggError, setBggError] = useState<'no_credentials' | 'api_error' | null>(null)
   const [addingId, setAddingId] = useState<number | null>(null)
   const [selectedGame, setSelectedGame] = useState<{ eventId: string; gameId: string } | null>(null)
 
@@ -156,13 +157,23 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
     if (!searchQuery.trim()) {
       setSearchResults([])
       setIsSearching(false)
+      setBggError(null)
       return
     }
     setIsSearching(true)
+    setBggError(null)
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/bgg?q=${encodeURIComponent(searchQuery.trim())}`)
-        if (res.ok) setSearchResults(await res.json())
+        if (res.status === 503) {
+          setBggError('no_credentials')
+        } else if (res.ok) {
+          setSearchResults(await res.json())
+        } else {
+          setBggError('api_error')
+        }
+      } catch {
+        setBggError('api_error')
       } finally {
         setIsSearching(false)
       }
@@ -174,6 +185,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
     setOpenDialogEventId(null)
     setSearchQuery('')
     setSearchResults([])
+    setBggError(null)
   }
 
   const handleToggleAttendance = async (eventId: string) => {
@@ -413,7 +425,17 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
             </div>
           )}
 
-          {!isSearching && searchQuery.trim() && searchResults.length === 0 && (
+          {!isSearching && searchQuery.trim() && bggError === 'no_credentials' && (
+            <p className="text-sm text-amber-600 text-center py-4">
+              BGG-Suche nicht konfiguriert. Bitte <code>BGG_USERNAME</code> und <code>BGG_PASSWORD</code> in Vercel setzen.
+            </p>
+          )}
+
+          {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
+            <p className="text-sm text-muted-foreground text-center py-4">BGG-Suche fehlgeschlagen. Bitte später versuchen.</p>
+          )}
+
+          {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">Keine Ergebnisse gefunden</p>
           )}
         </DialogContent>

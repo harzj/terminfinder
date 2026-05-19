@@ -105,7 +105,10 @@ export async function GET(request: NextRequest) {
   try {
     // BGG API requires authentication – login first if credentials are set
     const cookies = await getBggCookies(controller.signal)
-    const headers: Record<string, string> = cookies ? { Cookie: cookies } : {}
+    if (!cookies) {
+      return NextResponse.json({ error: 'bgg_no_credentials' }, { status: 503 })
+    }
+    const headers: Record<string, string> = { Cookie: cookies }
 
     if (q) {
       const bggRes = await fetch(

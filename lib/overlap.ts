@@ -60,10 +60,34 @@ export function computeOverlaps(
     const confirmed = dayAvailabilities.filter((a) => a.status === 'available')
     const uncertain = dayAvailabilities.filter((a) => a.status === 'uncertain')
 
+    // Genug sichere Zusagen → Zeitfenster nur aus "Kann"-Personen
     if (confirmed.length >= minParticipants) {
-      // Zeitfenster berechnen
       const froms = confirmed.map((a) => timeToMinutes(a.from_time ?? DEFAULT_FROM))
       const untils = confirmed.map((a) => timeToMinutes(a.until_time ?? DEFAULT_UNTIL))
+
+      const overlapFrom = Math.max(...froms)
+      const overlapUntil = Math.min(...untils)
+
+      if (overlapUntil > overlapFrom) {
+        results.push({
+          date: dateStr,
+          from_time: minutesToTime(overlapFrom),
+          until_time: minutesToTime(overlapUntil),
+          confirmed_participants: confirmed.map((a) => ({
+            id: a.user_id,
+            display_name: a.profiles.display_name,
+          })),
+          uncertain_participants: uncertain.map((a) => ({
+            id: a.user_id,
+            display_name: a.profiles.display_name,
+          })),
+        })
+      }
+    // Nicht genug sichere, aber Kann + Unklar reicht → Zeitfenster aus allen
+    } else if (confirmed.length + uncertain.length >= minParticipants) {
+      const all = [...confirmed, ...uncertain]
+      const froms = all.map((a) => timeToMinutes(a.from_time ?? DEFAULT_FROM))
+      const untils = all.map((a) => timeToMinutes(a.until_time ?? DEFAULT_UNTIL))
 
       const overlapFrom = Math.max(...froms)
       const overlapUntil = Math.min(...untils)
