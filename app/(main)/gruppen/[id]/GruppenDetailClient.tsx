@@ -73,6 +73,8 @@ export default function GruppenDetailClient({
             events={events}
             startDate={startDate}
             endDate={endDate}
+            blockedDates={blockedDates}
+            currentUserId={currentUserId}
           />
         </TabsContent>
 

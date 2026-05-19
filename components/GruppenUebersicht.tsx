@@ -11,6 +11,8 @@ interface Props {
   events: any[]
   startDate: string
   endDate: string
+  blockedDates?: string[]
+  currentUserId?: string
 }
 
 const STATUS_CELL: Record<string, string> = {
@@ -18,7 +20,7 @@ const STATUS_CELL: Record<string, string> = {
   uncertain: 'bg-yellow-400 text-black',
 }
 
-export default function GruppenUebersicht({ members, availabilities, events, startDate, endDate }: Props) {
+export default function GruppenUebersicht({ members, availabilities, events, startDate, endDate, blockedDates, currentUserId }: Props) {
   // Alle 28 Tage generieren
   const days: string[] = []
   const start = parseISO(startDate)
@@ -26,10 +28,13 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
     days.push(format(addDays(start, i), 'yyyy-MM-dd'))
   }
 
-  // Confirmed Events pro Tag
+  // Confirmed Events pro Tag (dieser Gruppe)
   const confirmedDates = new Set(
     events.filter((e: any) => e.status === 'confirmed').map((e: any) => e.proposed_date)
   )
+
+  // Blockierte Tage in anderen Gruppen (nur aktueller User)
+  const blockedDateSet = new Set(blockedDates ?? [])
 
   // Availability-Index: user_id → date → {status, from_time, until_time}
   const availMap = new Map<string, Map<string, any>>()
@@ -73,6 +78,7 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
               {days.map((d) => {
                 const avail = dayMap.get(d)
                 const isConfirmed = confirmedDates.has(d)
+                const isBlockedOtherGroup = !isConfirmed && member.user_id === currentUserId && blockedDateSet.has(d)
 
                 return (
                   <div
@@ -81,13 +87,16 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
                       'h-6 w-7 mx-auto rounded flex items-center justify-center',
                       isConfirmed
                         ? 'bg-blue-100'
-                        : avail
-                          ? STATUS_CELL[avail.status]
-                          : 'bg-muted'
+                        : isBlockedOtherGroup
+                          ? 'bg-purple-100'
+                          : avail
+                            ? STATUS_CELL[avail.status]
+                            : 'bg-muted'
                     )}
-                    title={avail ? `${avail.status}${avail.from_time ? ` ${avail.from_time.slice(0,5)}–${avail.until_time?.slice(0,5) ?? ''}` : ''}` : 'keine Angabe'}
+                    title={isBlockedOtherGroup ? 'Termin in anderer Gruppe' : avail ? `${avail.status}${avail.from_time ? ` ${avail.from_time.slice(0,5)}–${avail.until_time?.slice(0,5) ?? ''}` : ''}` : 'keine Angabe'}
                   >
                     {isConfirmed && <Lock className="h-3 w-3 text-blue-600" />}
+                    {isBlockedOtherGroup && <Lock className="h-3 w-3 text-purple-500" />}
                   </div>
                 )
               })}
@@ -109,6 +118,9 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded bg-blue-100 inline-block" /> Bestätigt
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded bg-purple-100 inline-block" /> Andere Gruppe
         </span>
       </div>
     </div>

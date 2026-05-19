@@ -11,11 +11,21 @@ export default async function GruppenEinstellungenPage({ params }: { params: Pro
   const { data: group } = await supabase.from('groups').select('*').eq('id', id).single()
   if (!group || group.created_by !== user.id) notFound()
 
-  const { data: members } = await supabase
+  const { data: rawMembers } = await supabase
     .from('group_members')
-    .select('*, profiles(display_name)')
+    .select('id, user_id, email, status, invite_code, joined_at')
     .eq('group_id', id)
     .order('joined_at')
+
+  const memberUserIds = (rawMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
+  const { data: profileData } = memberUserIds.length > 0
+    ? await supabase.from('profiles').select('id, display_name').in('id', memberUserIds)
+    : { data: [] as any[] }
+  const profileMap = new Map((profileData ?? []).map((p: any) => [p.id, p]))
+  const members = (rawMembers ?? []).map((m: any) => ({
+    ...m,
+    profiles: profileMap.get(m.user_id) ?? null,
+  }))
 
   return (
     <GruppenEinstellungenClient
