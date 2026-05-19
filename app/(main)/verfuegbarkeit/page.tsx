@@ -4,8 +4,9 @@ import { format, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { CalendarCheck, Vote } from 'lucide-react'
+import { CalendarCheck } from 'lucide-react'
 import VerfuegbarkeitClient from './VerfuegbarkeitClient'
+import LaufendeAbstimmungen from './LaufendeAbstimmungen'
 import { DefaultTimes } from '@/lib/holidays'
 
 export default async function VerfuegbarkeitPage() {
@@ -128,38 +129,11 @@ export default async function VerfuegbarkeitPage() {
 
       {/* ── Laufende Abstimmungen ──────────────────── */}
       {activeVotings.length > 0 && (
-        <section>
-          <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
-            <Vote className="h-4 w-4 text-primary" /> Laufende Abstimmungen
-          </h2>
-          <div className="space-y-2">
-            {activeVotings.map((event: any) => {
-              const myResponse = (event.event_responses ?? []).find((r: any) => r.user_id === user.id)?.response
-              return (
-                <Link key={event.id} href={`/gruppen/${event.group_id}`}>
-                  <div className="rounded-lg border border-border p-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-sm">
-                        {format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de })}
-                      </p>
-                      {event.from_time && (
-                        <p className="text-xs text-muted-foreground">
-                          {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <Badge variant="outline" className="text-xs">{event.groups?.name ?? ''}</Badge>
-                      {myResponse === 'accepted' && <span className="text-[10px] text-green-600 font-medium">Zugesagt</span>}
-                      {myResponse === 'uncertain' && <span className="text-[10px] text-yellow-600 font-medium">Unklar</span>}
-                      {myResponse === 'declined' && <span className="text-[10px] text-muted-foreground">Abgelehnt</span>}
-                    </div>
-                  </div>
-                </Link>
-              )
-            })}
-          </div>
-        </section>
+        <LaufendeAbstimmungen
+          events={activeVotings}
+          userId={user.id}
+          availability={(availability ?? []).map((a: any) => ({ date: a.date, status: a.status }))}
+        />
       )}
 
       {/* ── Verfügbarkeitskalender ─────────────────── */}
