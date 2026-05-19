@@ -151,6 +151,13 @@ export async function GET(request: NextRequest) {
 
       // BGG queues collection requests – retry up to 5 times with 3s delays
       let bggRes = await bggFetch(url, controller.signal)
+
+      // If 401/403, try with app credentials (allows fetching public collections)
+      if (bggRes.status === 401 || bggRes.status === 403) {
+        const cookies = await getBggCookies(controller.signal)
+        if (cookies) bggRes = await bggFetch(url, controller.signal, cookies)
+      }
+
       for (let attempt = 0; attempt < 5 && bggRes.status === 202; attempt++) {
         await new Promise((r) => setTimeout(r, 3000))
         bggRes = await bggFetch(url, controller.signal)

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw } from 'lucide-react'
 
 interface Membership {
   id: string
@@ -20,15 +20,20 @@ interface Props {
   profile: { id: string; display_name: string; bgg_username: string | null }
   email: string
   memberships: Membership[]
+  bggCollectionCount: number
 }
 
-export default function ProfilClient({ profile, email, memberships }: Props) {
+export default function ProfilClient({ profile, email, memberships, bggCollectionCount }: Props) {
   const router = useRouter()
 
   const [displayName, setDisplayName] = useState(profile.display_name)
   const [bggUsername, setBggUsername] = useState(profile.bgg_username ?? '')
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+
+  const [syncingCollection, setSyncingCollection] = useState(false)
+  const [syncedCount, setSyncedCount] = useState<number | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const [groupNames, setGroupNames] = useState<Record<string, string>>(
     Object.fromEntries(memberships.map((m) => [m.id, m.display_name ?? '']))
@@ -68,6 +73,27 @@ export default function ProfilClient({ profile, email, memberships }: Props) {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/anmelden')
+  }
+
+  const handleSyncCollection = async () => {
+    const name = bggUsername.trim()
+    if (!name || syncingCollection) return
+    setSyncingCollection(true)
+    setSyncError(null)
+    try {
+      const res = await fetch(`/api/bgg?action=collection&username=${encodeURIComponent(name)}`)
+      if (!res.ok) {
+        setSyncError('BGG-Sammlung konnte nicht geladen werden. Bitte später erneut versuchen.')
+        return
+      }
+      const collection = await res.json()
+      const supabase = createClient()
+      await supabase.from('profiles').update({ bgg_collection: collection }).eq('id', profile.id)
+      setSyncedCount(collection.length)
+      router.refresh()
+    } finally {
+      setSyncingCollection(false)
+    }
   }
 
   return (
@@ -118,6 +144,37 @@ export default function ProfilClient({ profile, email, memberships }: Props) {
               'Speichern'
             )}
           </Button>
+
+          {/* BGG-Sammlung synchronisieren */}
+          {(profile.bgg_username || bggUsername.trim()) && (
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">BGG-Sammlung</span>
+                <span className="text-xs text-muted-foreground">
+                  {syncedCount !== null
+                    ? `${syncedCount} Spiele geladen`
+                    : bggCollectionCount > 0
+                    ? `${bggCollectionCount} Spiele gecacht`
+                    : 'Noch nicht synchronisiert'}
+                </span>
+              </div>
+              {syncError && <p className="text-xs text-destructive">{syncError}</p>}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleSyncCollection}
+                disabled={syncingCollection || !bggUsername.trim()}
+              >
+                {syncingCollection ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Wird geladen…</>
+                ) : (
+                  <><RefreshCw className="h-4 w-4 mr-1" /> Sammlung synchronisieren</>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">Lädt deine aktuellen BGG-Spiele und speichert sie lokal.</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

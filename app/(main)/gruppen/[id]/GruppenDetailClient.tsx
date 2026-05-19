@@ -22,10 +22,11 @@ interface Props {
   endDate: string
   blockedDates: string[]
   bggUsername: string | null
+  bggCollection: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
 }
 
 export default function GruppenDetailClient({
-  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, bggUsername
+  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, bggUsername, bggCollection
 }: Props) {
   const votingCount = events.filter((e: any) => e.status === 'voting').length
 
@@ -108,6 +109,7 @@ export default function GruppenDetailClient({
             groupId={group.id}
             minParticipants={group.min_participants ?? 2}
             bggUsername={bggUsername}
+            bggCollection={bggCollection}
           />
         </TabsContent>
       </Tabs>

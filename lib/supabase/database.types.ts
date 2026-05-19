@@ -14,18 +14,21 @@ export interface Database {
           id: string
           display_name: string
           bgg_username: string | null
+          bgg_collection: Json | null
           created_at: string
         }
         Insert: {
           id: string
           display_name: string
           bgg_username?: string | null
+          bgg_collection?: Json | null
           created_at?: string
         }
         Update: {
           id?: string
           display_name?: string
           bgg_username?: string | null
+          bgg_collection?: Json | null
           created_at?: string
         }
         Relationships: []
