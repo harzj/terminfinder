@@ -43,7 +43,7 @@ export default function LaufendeAbstimmungen({ events, userId, availability }: P
     const myResponse = (event.event_responses ?? []).find((r: any) => r.user_id === userId)?.response
     const avail = availMap.get(event.proposed_date)
     if (mode === 'ausstehend') return myResponse == null || myResponse === 'uncertain'
-    if (mode === 'aktive') return avail === 'available' || avail === 'uncertain'
+    if (mode === 'aktive') return (avail === 'available' || avail === 'uncertain') && myResponse !== 'declined'
     return true
   })
 
