@@ -432,7 +432,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           )}
 
           {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
-            <p className="text-sm text-muted-foreground text-center py-4">BGG-Suche fehlgeschlagen. Bitte später versuchen.</p>
+            <p className="text-sm text-destructive text-center py-4">BGG-Suche fehlgeschlagen – bitte in ein paar Sekunden nochmal versuchen.</p>
           )}
 
           {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (

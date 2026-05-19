@@ -73,22 +73,40 @@ async function getBggCookies(signal: AbortSignal): Promise<string | null> {
   try {
     const res = await fetch('https://boardgamegeek.com/login/api/v1', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; Terminfinder/1.0)',
+      },
       body: JSON.stringify({ credentials: { username, password } }),
       signal,
     })
     if (!res.ok) return null
 
-    // Collect all Set-Cookie values
-    const raw = res.headers.get('set-cookie')
-    if (!raw) return null
-    // Each cookie is separated by comma (but values can contain commas too).
-    // Split on boundaries like ", cookieName=" to be safe.
-    const parts = raw.split(/,\s*(?=[A-Za-z_][^=]+=)/)
-    return parts.map(c => c.split(';')[0].trim()).filter(Boolean).join('; ')
+    // Node 18+ undici fetch: use getSetCookie() – headers.get('set-cookie') is unreliable
+    let rawCookies: string[]
+    if (typeof (res.headers as any).getSetCookie === 'function') {
+      rawCookies = (res.headers as any).getSetCookie() as string[]
+    } else {
+      const raw = res.headers.get('set-cookie') ?? ''
+      // Split on cookie boundaries (commas before "name=")
+      rawCookies = raw ? raw.split(/,\s*(?=[A-Za-z_][^=]+=)/) : []
+    }
+
+    if (rawCookies.length === 0) return null
+    const cookieStr = rawCookies.map((c: string) => c.split(';')[0].trim()).filter(Boolean).join('; ')
+    return cookieStr || null
   } catch {
     return null
   }
+}
+
+async function bggFetch(url: string, signal: AbortSignal, cookies?: string): Promise<Response> {
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (compatible; Terminfinder/1.0)',
+    'Accept': 'application/xml,text/xml,*/*',
+  }
+  if (cookies) headers['Cookie'] = cookies
+  return fetch(url, { signal, headers })
 }
 
 export async function GET(request: NextRequest) {
@@ -99,42 +117,55 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing parameter' }, { status: 400 })
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12_000)
-
-  try {
-    // BGG API requires authentication – login first if credentials are set
-    const cookies = await getBggCookies(controller.signal)
-    if (!cookies) {
-      return NextResponse.json({ error: 'bgg_no_credentials' }, { status: 503 })
-    }
-    const headers: Record<string, string> = { Cookie: cookies }
-
-    if (q) {
-      const bggRes = await fetch(
-        `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(q)}&type=boardgame`,
-        { signal: controller.signal, headers }
-      )
-      if (!bggRes.ok) return NextResponse.json({ error: 'BGG error' }, { status: 502 })
-      const xml = await bggRes.text()
-      return NextResponse.json(parseSearchXml(xml))
-    }
-
-    // id-Zweig: nur numerische IDs erlaubt
-    const numericId = parseInt(id!, 10)
+  // Validate id parameter
+  let numericId: number | null = null
+  if (id) {
+    numericId = parseInt(id, 10)
     if (isNaN(numericId) || numericId <= 0) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
     }
+  }
 
-    const bggRes = await fetch(
-      `https://boardgamegeek.com/xmlapi2/thing?id=${numericId}&type=boardgame`,
-      { signal: controller.signal, headers }
-    )
-    if (!bggRes.ok) return NextResponse.json({ error: 'BGG error' }, { status: 502 })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15_000)
+
+  try {
+    const url = q
+      ? `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(q)}&type=boardgame`
+      : `https://boardgamegeek.com/xmlapi2/thing?id=${numericId}&type=boardgame`
+
+    // Step 1: Try without authentication (works from many server IPs)
+    let bggRes = await bggFetch(url, controller.signal)
+
+    // Step 2: If 401/403, authenticate and retry
+    if (bggRes.status === 401 || bggRes.status === 403) {
+      const cookies = await getBggCookies(controller.signal)
+      if (!cookies) {
+        return NextResponse.json({ error: 'bgg_no_credentials' }, { status: 503 })
+      }
+      bggRes = await bggFetch(url, controller.signal, cookies)
+    }
+
+    // Handle BGG's 202 "still processing" – retry once after delay
+    if (bggRes.status === 202) {
+      await new Promise((r) => setTimeout(r, 3000))
+      bggRes = await bggFetch(url, controller.signal, undefined)
+      if (bggRes.status === 202) {
+        return NextResponse.json({ error: 'BGG still processing' }, { status: 503 })
+      }
+    }
+
+    if (!bggRes.ok) {
+      return NextResponse.json({ error: `BGG error ${bggRes.status}` }, { status: 502 })
+    }
+
     const xml = await bggRes.text()
+    if (q) return NextResponse.json(parseSearchXml(xml))
+
     const result = parseThingXml(xml)
     if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     return NextResponse.json(result)
+
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
       return NextResponse.json({ error: 'BGG API timeout' }, { status: 504 })
