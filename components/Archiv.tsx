@@ -154,6 +154,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
   // BGG-Sammlung des aktuellen Users
   const [bggCollection, setBggCollection] = useState<BggCollectionItem[] | null>(null)
   const [loadingCollection, setLoadingCollection] = useState(false)
+  const [collectionError, setCollectionError] = useState(false)
 
   // Manuelle Termin-Eingabe
   const [showManualDialog, setShowManualDialog] = useState(false)
@@ -165,17 +166,26 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
   const todayStr = new Date().toISOString().split('T')[0]
 
   // BGG-Sammlung laden wenn Dialog öffnet und bggUsername gesetzt ist
-  useEffect(() => {
-    if (!openDialogEventId || !bggUsername || bggCollection !== null) return
+  const loadCollection = (force = false) => {
+    if (!bggUsername || (bggCollection !== null && !force)) return
     setLoadingCollection(true)
+    setCollectionError(false)
     fetch(`/api/bgg?action=collection&username=${encodeURIComponent(bggUsername)}`)
       .then(async (res) => {
-        if (res.ok) setBggCollection(await res.json())
-        else setBggCollection([])
+        if (res.ok) {
+          setBggCollection(await res.json())
+        } else {
+          setCollectionError(true)
+        }
       })
-      .catch(() => setBggCollection([]))
+      .catch(() => setCollectionError(true))
       .finally(() => setLoadingCollection(false))
-  }, [openDialogEventId, bggUsername, bggCollection])
+  }
+
+  useEffect(() => {
+    if (openDialogEventId) loadCollection()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDialogEventId])
 
   // Debounced BGG-Suche (nur wenn kein bggUsername gesetzt)
   useEffect(() => {
@@ -486,11 +496,20 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           {bggUsername && (
             <>
               {loadingCollection && (
-                <div className="flex justify-center py-4">
+                <div className="flex flex-col items-center gap-2 py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  <p className="text-xs text-muted-foreground">BGG-Sammlung wird geladen…</p>
                 </div>
               )}
-              {!loadingCollection && bggCollection !== null && (
+              {!loadingCollection && collectionError && (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <p className="text-sm text-muted-foreground text-center">Sammlung konnte nicht geladen werden.</p>
+                  <Button variant="outline" size="sm" onClick={() => loadCollection(true)}>
+                    Erneut versuchen
+                  </Button>
+                </div>
+              )}
+              {!loadingCollection && !collectionError && bggCollection !== null && (
                 <div className="max-h-64 overflow-y-auto -mx-1 space-y-0.5">
                   {(bggCollection.filter(item =>
                     !searchQuery.trim() || item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
@@ -514,7 +533,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
                     <p className="text-sm text-muted-foreground text-center py-2">Nicht in deiner Sammlung.</p>
                   )}
                   {bggCollection.length === 0 && !searchQuery.trim() && (
-                    <p className="text-sm text-muted-foreground text-center py-2">Sammlung leer oder nicht öffentlich.</p>
+                    <p className="text-sm text-muted-foreground text-center py-2">Keine eigenen Spiele in der BGG-Sammlung gefunden.</p>
                   )}
                 </div>
               )}

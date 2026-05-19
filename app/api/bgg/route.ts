@@ -145,18 +145,19 @@ export async function GET(request: NextRequest) {
     if (!username) return NextResponse.json({ error: 'Missing username' }, { status: 400 })
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 20_000)
+    const timeout = setTimeout(() => controller.abort(), 30_000)
     try {
       const url = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`
-      let bggRes = await bggFetch(url, controller.signal)
 
-      // BGG queues collection requests – retry once after delay
-      if (bggRes.status === 202) {
-        await new Promise((r) => setTimeout(r, 4000))
+      // BGG queues collection requests – retry up to 5 times with 3s delays
+      let bggRes = await bggFetch(url, controller.signal)
+      for (let attempt = 0; attempt < 5 && bggRes.status === 202; attempt++) {
+        await new Promise((r) => setTimeout(r, 3000))
         bggRes = await bggFetch(url, controller.signal)
-        if (bggRes.status === 202) {
-          return NextResponse.json({ error: 'BGG still processing' }, { status: 503 })
-        }
+      }
+
+      if (bggRes.status === 202) {
+        return NextResponse.json({ error: 'bgg_timeout' }, { status: 503 })
       }
 
       if (!bggRes.ok) {
@@ -164,10 +165,11 @@ export async function GET(request: NextRequest) {
       }
 
       const xml = await bggRes.text()
-      return NextResponse.json(parseCollectionXml(xml))
+      const items = parseCollectionXml(xml)
+      return NextResponse.json(items)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        return NextResponse.json({ error: 'BGG API timeout' }, { status: 504 })
+        return NextResponse.json({ error: 'bgg_timeout' }, { status: 503 })
       }
       return NextResponse.json({ error: 'BGG API error' }, { status: 502 })
     } finally {
