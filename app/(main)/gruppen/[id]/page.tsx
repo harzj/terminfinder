@@ -29,20 +29,23 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   // Mitglieder laden (getrennte Queries wegen RLS + nested join Problem)
   const { data: rawMembers } = await supabase
     .from('group_members')
-    .select('user_id, email, status')
+    .select('user_id, email, status, display_name')
     .eq('group_id', id)
     .eq('status', 'active')
 
   const memberIds = (rawMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
 
   const { data: profileData } = memberIds.length > 0
-    ? await supabase.from('profiles').select('id, display_name').in('id', memberIds)
+    ? await supabase.from('profiles').select('id, display_name, bgg_username').in('id', memberIds)
     : { data: [] as any[] }
   const profileMap = new Map((profileData ?? []).map((p: any) => [p.id, p]))
   const members = (rawMembers ?? []).map((m: any) => ({
     ...m,
     profiles: profileMap.get(m.user_id) ?? null,
   }))
+
+  const currentUserProfile = profileMap.get(user.id)
+  const bggUsername: string | null = currentUserProfile?.bgg_username ?? null
 
   // Verfügbarkeiten aller Mitglieder für nächste 28 Tage
   const today = new Date()
@@ -111,6 +114,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
       startDate={todayStr}
       endDate={endStr}
       blockedDates={blockedDates}
+      bggUsername={bggUsername}
     />
   )
 }

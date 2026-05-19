@@ -64,7 +64,7 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
         {/* Zeilen: Mitglieder */}
         {members.map((member: any) => {
           const dayMap = availMap.get(member.user_id) ?? new Map()
-          const name = member.profiles?.display_name ?? member.email?.split('@')[0] ?? '?'
+          const name = member.display_name ?? member.profiles?.display_name ?? member.email?.split('@')[0] ?? '?'
 
           return (
             <div

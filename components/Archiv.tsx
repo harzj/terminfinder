@@ -11,6 +11,12 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 
+interface BggCollectionItem {
+  id: number
+  name: string
+  thumbnail_url: string | null
+}
+
 interface BggResult {
   id: number
   name: string
@@ -39,6 +45,7 @@ interface Props {
   currentUserId: string
   groupId: string
   minParticipants: number
+  bggUsername?: string | null
 }
 
 // ── Long-Press-Hook ──────────────────────────────────────────
@@ -116,7 +123,7 @@ function GamePoster({ game, isSelected, onLongPress, onDelete, onCancel }: GameP
 }
 
 // ── Archiv-Hauptkomponente ───────────────────────────────────
-export default function Archiv({ pastEvents, currentUserId, groupId, minParticipants }: Props) {
+export default function Archiv({ pastEvents, currentUserId, groupId, minParticipants, bggUsername }: Props) {
   const router = useRouter()
 
   const [gamesMap, setGamesMap] = useState<Record<string, Game[]>>(() => {
@@ -144,6 +151,10 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
   const [manualGameAdding, setManualGameAdding] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ eventId: string; gameId: string } | null>(null)
 
+  // BGG-Sammlung des aktuellen Users
+  const [bggCollection, setBggCollection] = useState<BggCollectionItem[] | null>(null)
+  const [loadingCollection, setLoadingCollection] = useState(false)
+
   // Manuelle Termin-Eingabe
   const [showManualDialog, setShowManualDialog] = useState(false)
   const [manualDate, setManualDate] = useState('')
@@ -153,8 +164,22 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  // Debounced BGG-Suche
+  // BGG-Sammlung laden wenn Dialog öffnet und bggUsername gesetzt ist
   useEffect(() => {
+    if (!openDialogEventId || !bggUsername || bggCollection !== null) return
+    setLoadingCollection(true)
+    fetch(`/api/bgg?action=collection&username=${encodeURIComponent(bggUsername)}`)
+      .then(async (res) => {
+        if (res.ok) setBggCollection(await res.json())
+        else setBggCollection([])
+      })
+      .catch(() => setBggCollection([]))
+      .finally(() => setLoadingCollection(false))
+  }, [openDialogEventId, bggUsername, bggCollection])
+
+  // Debounced BGG-Suche (nur wenn kein bggUsername gesetzt)
+  useEffect(() => {
+    if (bggUsername) return
     if (!searchQuery.trim()) {
       setSearchResults([])
       setIsSearching(false)
@@ -180,13 +205,40 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
       }
     }, 300)
     return () => { clearTimeout(timer); setIsSearching(false) }
-  }, [searchQuery])
+  }, [searchQuery, bggUsername])
 
   const closeDialog = () => {
     setOpenDialogEventId(null)
     setSearchQuery('')
     setSearchResults([])
     setBggError(null)
+  }
+
+  // Spiel aus BGG-Sammlung hinzufügen (hat bereits thumbnail_url)
+  const handleAddCollectionItem = async (item: BggCollectionItem) => {
+    if (!openDialogEventId || addingId !== null) return
+    setAddingId(item.id)
+    const eventId = openDialogEventId
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('event_games')
+        .insert({
+          event_id: eventId,
+          bgg_id: item.id,
+          name: item.name,
+          thumbnail_url: item.thumbnail_url,
+          added_by: currentUserId,
+        })
+        .select()
+        .single()
+      if (!error && data) {
+        setGamesMap(prev => ({ ...prev, [eventId]: [...(prev[eventId] ?? []), data] }))
+      }
+    } finally {
+      setAddingId(null)
+      closeDialog()
+    }
   }
 
   const handleToggleAttendance = async (eventId: string) => {
@@ -424,51 +476,101 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           </DialogHeader>
 
           <Input
-            placeholder="Spieltitel suchen…"
+            placeholder={bggUsername ? 'Sammlung durchsuchen…' : 'Spieltitel…'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             autoFocus
           />
 
-          {isSearching && (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
+          {/* BGG-Sammlung Modus */}
+          {bggUsername && (
+            <>
+              {loadingCollection && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              {!loadingCollection && bggCollection !== null && (
+                <div className="max-h-64 overflow-y-auto -mx-1 space-y-0.5">
+                  {(bggCollection.filter(item =>
+                    !searchQuery.trim() || item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+                  )).map(item => (
+                    <button
+                      key={item.id}
+                      className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center gap-2 disabled:opacity-50"
+                      disabled={addingId !== null}
+                      onClick={() => handleAddCollectionItem(item)}
+                    >
+                      {item.thumbnail_url && (
+                        <img src={item.thumbnail_url} alt="" className="h-8 w-8 object-cover rounded shrink-0" />
+                      )}
+                      <span className="truncate flex-1">{item.name}</span>
+                      {addingId === item.id && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
+                    </button>
+                  ))}
+                  {bggCollection.filter(item =>
+                    !searchQuery.trim() || item.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
+                  ).length === 0 && searchQuery.trim() && (
+                    <p className="text-sm text-muted-foreground text-center py-2">Nicht in deiner Sammlung.</p>
+                  )}
+                  {bggCollection.length === 0 && !searchQuery.trim() && (
+                    <p className="text-sm text-muted-foreground text-center py-2">Sammlung leer oder nicht öffentlich.</p>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
-          {!isSearching && searchResults.length > 0 && (
-            <div className="max-h-64 overflow-y-auto -mx-1 space-y-0.5">
-              {searchResults.map(result => (
-                <button
-                  key={result.id}
-                  className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center justify-between gap-2 disabled:opacity-50"
-                  disabled={addingId !== null}
-                  onClick={() => handleAddGame(result)}
-                >
-                  <span className="truncate">{result.name}{result.year ? ` (${result.year})` : ''}</span>
-                  {addingId === result.id && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Klassischer BGG-Suche-Modus (ohne bggUsername) */}
+          {!bggUsername && (
+            <>
+              {isSearching && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
 
-          {!isSearching && searchQuery.trim() && bggError === 'no_credentials' && (
-            <p className="text-sm text-amber-600 text-center py-4">
-              BGG-Suche nicht konfiguriert. Bitte <code>BGG_USERNAME</code> und <code>BGG_PASSWORD</code> in Vercel setzen.
-            </p>
-          )}
+              {!isSearching && searchResults.length > 0 && (
+                <div className="max-h-64 overflow-y-auto -mx-1 space-y-0.5">
+                  {searchResults.map(result => (
+                    <button
+                      key={result.id}
+                      className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center justify-between gap-2 disabled:opacity-50"
+                      disabled={addingId !== null}
+                      onClick={() => handleAddGame(result)}
+                    >
+                      <span className="truncate">{result.name}{result.year ? ` (${result.year})` : ''}</span>
+                      {addingId === result.id && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-          {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
-            <p className="text-sm text-muted-foreground text-center py-2">BGG nicht erreichbar.</p>
-          )}
+              {!isSearching && searchQuery.trim() && bggError === 'no_credentials' && (
+                <p className="text-sm text-amber-600 text-center py-4">
+                  BGG-Suche nicht verfügbar. Bitte BGG-Nutzernamen im Profil eintragen.
+                </p>
+              )}
 
-          {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-2">Keine BGG-Ergebnisse gefunden.</p>
+              {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
+                <p className="text-sm text-muted-foreground text-center py-2">BGG nicht erreichbar.</p>
+              )}
+
+              {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">Keine BGG-Ergebnisse gefunden.</p>
+              )}
+
+              {!searchQuery.trim() && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  Tipp: BGG-Nutzernamen im Profil eintragen, um deine eigene Sammlung zu nutzen.
+                </p>
+              )}
+            </>
           )}
 
           {/* Manuell eintragen – immer verfügbar wenn Suchbegriff vorhanden */}
           {searchQuery.trim() && (
-            <div className={searchResults.length > 0 ? 'border-t border-border pt-2' : ''}>
+            <div className={((bggUsername && bggCollection && bggCollection.length > 0) || (!bggUsername && searchResults.length > 0)) ? 'border-t border-border pt-2' : ''}>
               <button
                 className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center gap-2 text-muted-foreground disabled:opacity-50"
                 disabled={manualGameAdding}

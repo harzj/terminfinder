@@ -38,7 +38,7 @@ export default function NaechsteTermine({ group, availabilities, members, startD
   const overlaps = useMemo(() => {
     const memberProfiles = members.map((m: any) => ({
       id: m.user_id,
-      display_name: m.profiles?.display_name ?? m.email?.split('@')[0] ?? '?',
+      display_name: m.display_name ?? m.profiles?.display_name ?? m.email?.split('@')[0] ?? '?',
     }))
 
     // availability mit profiles anreichern

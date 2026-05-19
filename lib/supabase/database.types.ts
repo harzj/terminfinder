@@ -13,16 +13,19 @@ export interface Database {
         Row: {
           id: string
           display_name: string
+          bgg_username: string | null
           created_at: string
         }
         Insert: {
           id: string
           display_name: string
+          bgg_username?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           display_name?: string
+          bgg_username?: string | null
           created_at?: string
         }
         Relationships: []
@@ -64,6 +67,7 @@ export interface Database {
           invite_code: string
           invited_by: string | null
           joined_at: string | null
+          display_name: string | null
         }
         Insert: {
           id?: string
@@ -74,6 +78,7 @@ export interface Database {
           invite_code?: string
           invited_by?: string | null
           joined_at?: string | null
+          display_name?: string | null
         }
         Update: {
           id?: string
@@ -84,6 +89,7 @@ export interface Database {
           invite_code?: string
           invited_by?: string | null
           joined_at?: string | null
+          display_name?: string | null
         }
         Relationships: []
       }
