@@ -469,9 +469,9 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           {/* BGG-Sammlung Modus */}
           {bggUsername && (
             <>
-              {bggCollection === null || bggCollection.length === 0 ? (
+              {!bggCollection || bggCollection.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-3">
-                  {bggCollection === null
+                  {!bggCollection
                     ? 'Sammlung noch nicht synchronisiert. Bitte im Profil synchronisieren.'
                     : 'Keine eigenen Spiele in der BGG-Sammlung.'}
                 </p>
