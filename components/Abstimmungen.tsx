@@ -11,14 +11,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar } from 'lucide-react'
+import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+interface BggCollectionItem {
+  id: number
+  name: string
+  thumbnail_url: string | null
+}
 
 interface Props {
   group: any
   events: any[]
   currentUserId: string
   members: any[]
+  bggCollection?: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
 }
 
 const RESPONSE_LABELS = {
@@ -27,7 +34,7 @@ const RESPONSE_LABELS = {
   uncertain: { label: 'Unklar', icon: HelpCircle, color: 'text-yellow-500' },
 }
 
-export default function Abstimmungen({ group, events, currentUserId, members }: Props) {
+export default function Abstimmungen({ group, events, currentUserId, members, bggCollection }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -36,6 +43,22 @@ export default function Abstimmungen({ group, events, currentUserId, members }: 
   const [newUntil, setNewUntil] = useState('')
   const [newMin, setNewMin] = useState(group.min_participants)
   const [creating, setCreating] = useState(false)
+
+  // Spiele-Vorschlag
+  const [selectedGames, setSelectedGames] = useState<BggCollectionItem[]>([])
+  const [gameSearch, setGameSearch] = useState('')
+
+  const filteredGames = bggCollection && gameSearch.trim()
+    ? bggCollection.filter(g => g.name.toLowerCase().includes(gameSearch.trim().toLowerCase()))
+    : []
+
+  const toggleGame = (item: BggCollectionItem) => {
+    setSelectedGames(prev =>
+      prev.some(g => g.id === item.id)
+        ? prev.filter(g => g.id !== item.id)
+        : [...prev, item]
+    )
+  }
 
   const handleResponse = async (eventId: string, response: 'accepted' | 'declined' | 'uncertain') => {
     setLoading(eventId + response)
@@ -53,16 +76,31 @@ export default function Abstimmungen({ group, events, currentUserId, members }: 
     if (!newDate) return
     setCreating(true)
     const supabase = createClient()
-    await supabase.from('events').insert({
+    const { data: event } = await supabase.from('events').insert({
       group_id: group.id,
       proposed_date: newDate,
       from_time: newFrom || null,
       until_time: newUntil || null,
       min_participants: newMin,
       proposed_by: currentUserId,
-    })
+    }).select().single()
+
+    if (event && selectedGames.length > 0) {
+      await supabase.from('event_games').insert(
+        selectedGames.map(g => ({
+          event_id: event.id,
+          bgg_id: g.id,
+          name: g.name,
+          thumbnail_url: g.thumbnail_url,
+          added_by: currentUserId,
+        }))
+      )
+    }
+
     setCreating(false)
     setDialogOpen(false)
+    setSelectedGames([])
+    setGameSearch('')
     router.refresh()
   }
 
@@ -73,7 +111,10 @@ export default function Abstimmungen({ group, events, currentUserId, members }: 
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">Abstimmungen</h2>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) { setSelectedGames([]); setGameSearch('') }
+        }}>
           <DialogTrigger render={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Termin vorschlagen</Button>} />
           <DialogContent>
             <DialogHeader>
@@ -98,6 +139,62 @@ export default function Abstimmungen({ group, events, currentUserId, members }: 
                 <Label htmlFor="min">Mindest-Teilnehmer</Label>
                 <Input id="min" type="number" min={2} max={20} value={newMin} onChange={(e) => setNewMin(Number(e.target.value))} />
               </div>
+
+              {/* Spiele vorschlagen */}
+              {bggCollection && bggCollection.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Spiele vorschlagen <span className="text-muted-foreground font-normal">(optional)</span></Label>
+
+                  {/* Ausgewählte Spiele */}
+                  {selectedGames.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedGames.map(g => (
+                        <span
+                          key={g.id}
+                          className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5"
+                        >
+                          {g.name}
+                          <button type="button" onClick={() => toggleGame(g)} className="hover:text-destructive">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <Input
+                    placeholder="Sammlung durchsuchen…"
+                    value={gameSearch}
+                    onChange={e => setGameSearch(e.target.value)}
+                    autoComplete="off"
+                  />
+                  {filteredGames.length > 0 && (
+                    <div className="max-h-40 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                      {filteredGames.slice(0, 20).map(item => {
+                        const isSelected = selectedGames.some(g => g.id === item.id)
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => toggleGame(item)}
+                            className={cn(
+                              'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors',
+                              isSelected && 'bg-primary/5 font-medium'
+                            )}
+                          >
+                            {item.thumbnail_url && (
+                              <img src={item.thumbnail_url} alt="" className="h-7 w-7 object-cover rounded shrink-0" />
+                            )}
+                            <span className="flex-1 truncate">{item.name}</span>
+                            {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <Button type="submit" className="w-full" disabled={creating}>
                 {creating ? 'Vorschlagen…' : 'Abstimmung starten'}
               </Button>
