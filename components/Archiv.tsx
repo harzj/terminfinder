@@ -141,6 +141,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
   const [isSearching, setIsSearching] = useState(false)
   const [bggError, setBggError] = useState<'no_credentials' | 'api_error' | null>(null)
   const [addingId, setAddingId] = useState<number | null>(null)
+  const [manualGameAdding, setManualGameAdding] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ eventId: string; gameId: string } | null>(null)
 
   // Manuelle Termin-Eingabe
@@ -248,6 +249,32 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
       }
     } finally {
       setAddingId(null)
+      closeDialog()
+    }
+  }
+
+  const handleAddManualGame = async (name: string) => {
+    if (!openDialogEventId || manualGameAdding || !name.trim()) return
+    setManualGameAdding(true)
+    const eventId = openDialogEventId
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('event_games')
+        .insert({
+          event_id: eventId,
+          bgg_id: null,
+          name: name.trim(),
+          thumbnail_url: null,
+          added_by: currentUserId,
+        })
+        .select()
+        .single()
+      if (!error && data) {
+        setGamesMap(prev => ({ ...prev, [eventId]: [...(prev[eventId] ?? []), data] }))
+      }
+    } finally {
+      setManualGameAdding(false)
       closeDialog()
     }
   }
@@ -432,11 +459,28 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           )}
 
           {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
-            <p className="text-sm text-destructive text-center py-4">BGG-Suche fehlgeschlagen – bitte in ein paar Sekunden nochmal versuchen.</p>
+            <p className="text-sm text-muted-foreground text-center py-2">BGG nicht erreichbar.</p>
           )}
 
           {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Keine Ergebnisse gefunden</p>
+            <p className="text-sm text-muted-foreground text-center py-2">Keine BGG-Ergebnisse gefunden.</p>
+          )}
+
+          {/* Manuell eintragen – immer verfügbar wenn Suchbegriff vorhanden */}
+          {searchQuery.trim() && (
+            <div className={searchResults.length > 0 ? 'border-t border-border pt-2' : ''}>
+              <button
+                className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center gap-2 text-muted-foreground disabled:opacity-50"
+                disabled={manualGameAdding}
+                onClick={() => handleAddManualGame(searchQuery)}
+              >
+                {manualGameAdding
+                  ? <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  : <Plus className="h-4 w-4 shrink-0" />
+                }
+                <span>„{searchQuery}" ohne BGG eintragen</span>
+              </button>
+            </div>
           )}
         </DialogContent>
       </Dialog>

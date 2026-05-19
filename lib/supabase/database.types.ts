@@ -178,7 +178,7 @@ export interface Database {
         Row: {
           id: string
           event_id: string
-          bgg_id: number
+          bgg_id: number | null
           name: string
           thumbnail_url: string | null
           added_by: string | null
@@ -187,7 +187,7 @@ export interface Database {
         Insert: {
           id?: string
           event_id: string
-          bgg_id: number
+          bgg_id?: number | null
           name: string
           thumbnail_url?: string | null
           added_by?: string | null
@@ -196,7 +196,7 @@ export interface Database {
         Update: {
           id?: string
           event_id?: string
-          bgg_id?: number
+          bgg_id?: number | null
           name?: string
           thumbnail_url?: string | null
           added_by?: string | null
