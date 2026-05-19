@@ -1,12 +1,15 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
-import { Plus, Loader2 } from 'lucide-react'
+import { Check, Plus, Loader2, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 
 interface BggResult {
   id: number
@@ -27,13 +30,15 @@ interface PastEvent {
   proposed_date: string
   from_time: string | null
   until_time: string | null
-  event_responses: Array<{ response: string }>
+  event_responses: Array<{ response: string; user_id: string }>
   event_games: Game[]
 }
 
 interface Props {
   pastEvents: PastEvent[]
   currentUserId: string
+  groupId: string
+  minParticipants: number
 }
 
 // ── Long-Press-Hook ──────────────────────────────────────────
@@ -111,10 +116,22 @@ function GamePoster({ game, isSelected, onLongPress, onDelete, onCancel }: GameP
 }
 
 // ── Archiv-Hauptkomponente ───────────────────────────────────
-export default function Archiv({ pastEvents, currentUserId }: Props) {
+export default function Archiv({ pastEvents, currentUserId, groupId, minParticipants }: Props) {
+  const router = useRouter()
+
   const [gamesMap, setGamesMap] = useState<Record<string, Game[]>>(() => {
     const map: Record<string, Game[]> = {}
     for (const e of pastEvents) { map[e.id] = e.event_games ?? [] }
+    return map
+  })
+
+  // Anwesenheits-Toggle: war ich bei diesem Termin dabei?
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, boolean>>(() => {
+    const map: Record<string, boolean> = {}
+    for (const e of pastEvents) {
+      const my = (e.event_responses ?? []).find(r => r.user_id === currentUserId)
+      map[e.id] = my?.response === 'accepted'
+    }
     return map
   })
 
@@ -124,6 +141,15 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
   const [isSearching, setIsSearching] = useState(false)
   const [addingId, setAddingId] = useState<number | null>(null)
   const [selectedGame, setSelectedGame] = useState<{ eventId: string; gameId: string } | null>(null)
+
+  // Manuelle Termin-Eingabe
+  const [showManualDialog, setShowManualDialog] = useState(false)
+  const [manualDate, setManualDate] = useState('')
+  const [manualFrom, setManualFrom] = useState('')
+  const [manualUntil, setManualUntil] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
+
+  const todayStr = new Date().toISOString().split('T')[0]
 
   // Debounced BGG-Suche
   useEffect(() => {
@@ -148,6 +174,40 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
     setOpenDialogEventId(null)
     setSearchQuery('')
     setSearchResults([])
+  }
+
+  const handleToggleAttendance = async (eventId: string) => {
+    const newValue = !attendanceMap[eventId]
+    setAttendanceMap(prev => ({ ...prev, [eventId]: newValue }))
+    const supabase = createClient()
+    await supabase.from('event_responses').upsert(
+      { event_id: eventId, user_id: currentUserId, response: newValue ? 'accepted' : 'declined' },
+      { onConflict: 'event_id,user_id' }
+    )
+  }
+
+  const handleManualEntry = async () => {
+    if (!manualDate || manualSaving) return
+    setManualSaving(true)
+    try {
+      const supabase = createClient()
+      await supabase.from('events').insert({
+        group_id: groupId,
+        proposed_date: manualDate,
+        from_time: manualFrom || null,
+        until_time: manualUntil || null,
+        status: 'confirmed',
+        min_participants: minParticipants,
+        proposed_by: currentUserId,
+      })
+      setShowManualDialog(false)
+      setManualDate('')
+      setManualFrom('')
+      setManualUntil('')
+      router.refresh()
+    } finally {
+      setManualSaving(false)
+    }
   }
 
   const handleAddGame = async (bggResult: BggResult) => {
@@ -188,7 +248,52 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
   }
 
   if (pastEvents.length === 0) {
-    return <p className="text-center text-sm text-muted-foreground py-10">Noch keine vergangenen Termine.</p>
+    return (
+      <>
+        <p className="text-center text-sm text-muted-foreground py-10">Noch keine vergangenen Termine.</p>
+        <div className="flex justify-center mt-2">
+          <Button variant="outline" size="sm" onClick={() => setShowManualDialog(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Termin manuell eintragen
+          </Button>
+        </div>
+        {/* Manueller Termin-Dialog (empty state) */}
+        <Dialog open={showManualDialog} onOpenChange={open => { if (!open) { setShowManualDialog(false); setManualDate(''); setManualFrom(''); setManualUntil('') } }}>
+          <DialogContent className="max-w-sm" showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>Termin manuell eintragen</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="emptyManualDate">Datum *</Label>
+                <Input
+                  id="emptyManualDate"
+                  type="date"
+                  max={todayStr}
+                  value={manualDate}
+                  onChange={e => setManualDate(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="emptyManualFrom">Von</Label>
+                  <Input id="emptyManualFrom" type="time" value={manualFrom} onChange={e => setManualFrom(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="emptyManualUntil">Bis</Label>
+                  <Input id="emptyManualUntil" type="time" value={manualUntil} onChange={e => setManualUntil(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => setShowManualDialog(false)} disabled={manualSaving}>Abbrechen</Button>
+                <Button size="sm" onClick={handleManualEntry} disabled={!manualDate || manualSaving}>
+                  {manualSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Eintragen'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    )
   }
 
   return (
@@ -201,16 +306,30 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
           return (
             <div key={event.id} className="rounded-lg border border-border p-3 space-y-3">
               {/* Termin-Kopfzeile */}
-              <div>
-                <p className="font-medium text-sm">
-                  {format(parseISO(event.proposed_date), 'EEEE, d. MMMM yyyy', { locale: de })}
-                </p>
-                {event.from_time && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-sm">
+                    {format(parseISO(event.proposed_date), 'EEEE, d. MMMM yyyy', { locale: de })}
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-0.5">{accepted} Zusagen</p>
+                  {event.from_time && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5">{accepted} Zusagen</p>
+                </div>
+                {/* War ich dabei? */}
+                <button
+                  onClick={e => { e.stopPropagation(); handleToggleAttendance(event.id) }}
+                  className={`shrink-0 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium border transition-colors ${
+                    attendanceMap[event.id]
+                      ? 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/40 dark:text-green-400 dark:border-green-700'
+                      : 'bg-muted text-muted-foreground border-border hover:border-primary/50'
+                  }`}
+                >
+                  {attendanceMap[event.id] ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  War ich dabei
+                </button>
               </div>
 
               {/* Spiele-Poster-Grid */}
@@ -249,6 +368,13 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
             </div>
           )
         })}
+      </div>
+
+      {/* "Termin manuell hinzufügen"-Button */}
+      <div className="flex justify-center pt-2">
+        <Button variant="outline" size="sm" onClick={() => setShowManualDialog(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Termin manuell eintragen
+        </Button>
       </div>
 
       {/* Spiel-Suche-Dialog */}
@@ -290,6 +416,55 @@ export default function Archiv({ pastEvents, currentUserId }: Props) {
           {!isSearching && searchQuery.trim() && searchResults.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">Keine Ergebnisse gefunden</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manueller Termin-Dialog */}
+      <Dialog open={showManualDialog} onOpenChange={open => { if (!open) { setShowManualDialog(false); setManualDate(''); setManualFrom(''); setManualUntil('') } }}>
+        <DialogContent className="max-w-sm" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Termin manuell eintragen</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="manualDate">Datum *</Label>
+              <Input
+                id="manualDate"
+                type="date"
+                max={todayStr}
+                value={manualDate}
+                onChange={e => setManualDate(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="manualFrom">Von</Label>
+                <Input
+                  id="manualFrom"
+                  type="time"
+                  value={manualFrom}
+                  onChange={e => setManualFrom(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="manualUntil">Bis</Label>
+                <Input
+                  id="manualUntil"
+                  type="time"
+                  value={manualUntil}
+                  onChange={e => setManualUntil(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowManualDialog(false)} disabled={manualSaving}>
+                Abbrechen
+              </Button>
+              <Button size="sm" onClick={handleManualEntry} disabled={!manualDate || manualSaving}>
+                {manualSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Eintragen'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

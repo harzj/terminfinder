@@ -23,7 +23,8 @@ export interface ConfirmedEvent {
 }
 
 interface AvailabilityCalendarProps {
-  startDate: string
+  startDate: string   // Montag der aktuellen Woche
+  todayStr: string    // heutiges Datum
   availability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
   onSave: (day: DayAvailability) => Promise<void>
@@ -52,13 +53,15 @@ const LONG_PRESS_MS = 500
 
 export default function AvailabilityCalendar({
   startDate,
+  todayStr,
   availability,
   confirmedEvents,
   onSave,
   onDelete,
 }: AvailabilityCalendarProps) {
-  const today = parseISO(startDate)
-  const days = Array.from({ length: 28 }, (_, i) => addDays(today, i))
+  const weekStart = parseISO(startDate)   // Montag der aktuellen Woche
+  const today = parseISO(todayStr)
+  const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i))
 
   const [sheetDate, setSheetDate] = useState<Date | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -93,6 +96,8 @@ export default function AvailabilityCalendar({
     setSheetOpen(true)
   }
 
+  const isPastDay = (date: Date) => date < today
+
   const cycleTap = async (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
     if (pendingDate === dateStr) return
@@ -112,7 +117,7 @@ export default function AvailabilityCalendar({
   }
 
   const handlePointerDown = (date: Date, e: React.PointerEvent) => {
-    if (getConfirmedEvent(date)) return
+    if (getConfirmedEvent(date) || isPastDay(date)) return
     longPressFired.current = false
     pointerDownPos.current = { x: e.clientX, y: e.clientY }
     longPressTimer.current = setTimeout(() => {
@@ -173,7 +178,7 @@ export default function AvailabilityCalendar({
       : HOURS_DEFAULT.map(formatHour)
 
   const weeks: Date[][] = []
-  for (let i = 0; i < 28; i += 7) weeks.push(days.slice(i, i + 7))
+  for (let i = 0; i < 35; i += 7) weeks.push(days.slice(i, i + 7))
 
   const sheetAvail = sheetDate ? getAvailability(sheetDate) : undefined
 
@@ -187,13 +192,14 @@ export default function AvailabilityCalendar({
                 const avail = getAvailability(day)
                 const event = getConfirmedEvent(day)
                 const isToday = isSameDay(day, today)
+                const isPast = isPastDay(day)
                 const dateStr = format(day, 'yyyy-MM-dd')
                 const isPending = pendingDate === dateStr
 
                 return (
                   <button
                     key={day.toISOString()}
-                    disabled={!!event || isPending}
+                    disabled={!!event || isPending || isPast}
                     onPointerDown={(e) => handlePointerDown(day, e)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={() => handlePointerUp(day)}
@@ -204,11 +210,13 @@ export default function AvailabilityCalendar({
                       'border border-border',
                       isToday && 'ring-2 ring-primary ring-offset-1',
                       isPending && 'opacity-50',
-                      event
-                        ? 'bg-blue-100 text-blue-800 cursor-default'
-                        : avail?.status
-                          ? STATUS_COLORS[avail.status]
-                          : 'bg-muted text-muted-foreground active:opacity-60'
+                      isPast
+                        ? 'bg-muted/40 text-muted-foreground/40 cursor-default border-border/50'
+                        : event
+                          ? 'bg-blue-100 text-blue-800 cursor-default'
+                          : avail?.status
+                            ? STATUS_COLORS[avail.status]
+                            : 'bg-muted text-muted-foreground active:opacity-60'
                     )}
                   >
                     <span className="text-[10px] leading-none">
@@ -237,6 +245,7 @@ export default function AvailabilityCalendar({
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-400 inline-block" /> 2x Unklar</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted border border-border inline-block" /> 3x Nein</span>
         <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Gebucht</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted/40 border border-border/50 inline-block" /> Vergangen</span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">Lang drücken → Uhrzeiten einstellen</p>
 

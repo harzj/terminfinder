@@ -18,11 +18,18 @@ interface Props {
   startDate: string
   endDate: string
   currentUserId: string
+  events: any[]  // bereits vorgeschlagene / bestätigte Events dieser Gruppe
 }
 
-export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId }: Props) {
+export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events }: Props) {
   const router = useRouter()
   const [proposing, setProposing] = useState<string | null>(null)
+
+  // Datumsstrings aller bereits vorgeschlagenen / bestätigten Termine dieser Gruppe
+  const existingEventDates = useMemo(
+    () => new Set((events ?? []).map((e: any) => e.proposed_date as string)),
+    [events]
+  )
 
   const overlaps = useMemo(() => {
     const memberProfiles = members.map((m: any) => ({
@@ -42,8 +49,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
       group.min_participants,
       parseISO(startDate),
       parseISO(endDate)
-    ).slice(0, 10)
-  }, [availabilities, members, group.min_participants, startDate, endDate])
+    ).filter(o => !existingEventDates.has(o.date)).slice(0, 10)
+  }, [availabilities, members, group.min_participants, startDate, endDate, existingEventDates])
 
   const handlePropose = async (overlap: typeof overlaps[0]) => {
     setProposing(overlap.date)

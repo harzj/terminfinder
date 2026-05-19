@@ -92,11 +92,17 @@ export default function GruppenDetailClient({
             startDate={startDate}
             endDate={endDate}
             currentUserId={currentUserId}
+            events={events}
           />
         </TabsContent>
 
         <TabsContent value="archiv" className="p-4 mt-0">
-          <Archiv pastEvents={pastEvents} currentUserId={currentUserId} />
+          <Archiv
+            pastEvents={pastEvents}
+            currentUserId={currentUserId}
+            groupId={group.id}
+            minParticipants={group.min_participants ?? 2}
+          />
         </TabsContent>
       </Tabs>
     </div>

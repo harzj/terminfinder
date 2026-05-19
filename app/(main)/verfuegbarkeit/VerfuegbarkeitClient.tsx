@@ -7,12 +7,13 @@ import { useRouter } from 'next/navigation'
 
 interface Props {
   userId: string
-  startDate: string
+  startDate: string   // Montag der aktuellen Woche
+  todayStr: string    // heutiges Datum
   initialAvailability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
 }
 
-export default function VerfuegbarkeitClient({ userId, startDate, initialAvailability, confirmedEvents }: Props) {
+export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
   const [saveError, setSaveError] = useState<string | null>(null)
   const router = useRouter()
@@ -54,6 +55,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, initialAvailab
       )}
       <AvailabilityCalendar
       startDate={startDate}
+      todayStr={todayStr}
       availability={availability}
       confirmedEvents={confirmedEvents}
       onSave={handleSave}
