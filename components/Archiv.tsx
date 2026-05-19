@@ -19,7 +19,7 @@ interface BggResult {
 
 interface Game {
   id: string
-  bgg_id: number
+  bgg_id: number | null
   name: string
   thumbnail_url: string | null
   added_by: string | null
