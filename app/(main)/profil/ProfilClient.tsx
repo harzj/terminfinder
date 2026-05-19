@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Loader2, LogOut, RefreshCw } from 'lucide-react'
+import { DefaultTimes } from '@/lib/holidays'
 
 interface Membership {
   id: string
@@ -21,9 +22,10 @@ interface Props {
   email: string
   memberships: Membership[]
   bggCollectionCount: number
+  defaultTimes: DefaultTimes | null
 }
 
-export default function ProfilClient({ profile, email, memberships, bggCollectionCount }: Props) {
+export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes }: Props) {
   const router = useRouter()
 
   const [displayName, setDisplayName] = useState(profile.display_name)
@@ -34,6 +36,15 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [syncingCollection, setSyncingCollection] = useState(false)
   const [syncedCount, setSyncedCount] = useState<number | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
+
+  // Default availability times
+  type TimesState = { start: string; end: string }
+  const [workday, setWorkday] = useState<TimesState>(defaultTimes?.workday ?? { start: '18:00', end: '22:00' })
+  const [preFree, setPreFree] = useState<TimesState>(defaultTimes?.pre_free ?? { start: '18:00', end: '23:30' })
+  const [freeDay, setFreeDay] = useState<TimesState>(defaultTimes?.free_day ?? { start: '10:00', end: '22:00' })
+  const [timesEnabled, setTimesEnabled] = useState(defaultTimes !== null)
+  const [savingTimes, setSavingTimes] = useState(false)
+  const [timesSaved, setTimesSaved] = useState(false)
 
   const [groupNames, setGroupNames] = useState<Record<string, string>>(
     Object.fromEntries(memberships.map((m) => [m.id, m.display_name ?? '']))
@@ -73,6 +84,23 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/anmelden')
+  }
+
+  const handleSaveTimes = async () => {
+    setSavingTimes(true)
+    const supabase = createClient()
+    await supabase
+      .from('profiles')
+      .update({
+        default_availability_times: timesEnabled
+          ? { workday, pre_free: preFree, free_day: freeDay }
+          : null,
+      })
+      .eq('id', profile.id)
+    setSavingTimes(false)
+    setTimesSaved(true)
+    setTimeout(() => setTimesSaved(false), 2000)
+    router.refresh()
   }
 
   const handleSyncCollection = async () => {
@@ -218,6 +246,79 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
           </CardContent>
         </Card>
       )}
+
+      {/* Standard-Uhrzeiten */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Standard-Uhrzeiten</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Beim ersten Antippen eines Tages werden automatisch diese Zeiten eingetragen.
+            Gesetzliche Feiertage (national) werden erkannt.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="timesEnabled"
+              checked={timesEnabled}
+              onChange={(e) => setTimesEnabled(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="timesEnabled" className="cursor-pointer">Standard-Uhrzeiten aktivieren</Label>
+          </div>
+          {timesEnabled && (
+            <div className="space-y-4">
+              {([
+                { label: 'Werktag', sub: 'Mo–Do', key: 'workday', val: workday, set: setWorkday },
+                { label: 'Freitagsgefühl', sub: 'Fr + Tag vor Feiertag', key: 'pre_free', val: preFree, set: setPreFree },
+                { label: 'Freier Tag', sub: 'Sa, So, Feiertage', key: 'free_day', val: freeDay, set: setFreeDay },
+              ] as const).map(({ label, sub, val, set }) => (
+                <div key={label} className="space-y-1.5">
+                  <div>
+                    <span className="text-sm font-medium">{label}</span>
+                    <span className="text-xs text-muted-foreground ml-2">{sub}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 space-y-0.5">
+                      <Label className="text-xs text-muted-foreground">Von</Label>
+                      <input
+                        type="time"
+                        value={val.start}
+                        onChange={(e) => set((prev) => ({ ...prev, start: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-0.5">
+                      <Label className="text-xs text-muted-foreground">Bis</Label>
+                      <input
+                        type="time"
+                        value={val.end}
+                        onChange={(e) => set((prev) => ({ ...prev, end: e.target.value }))}
+                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button
+            onClick={handleSaveTimes}
+            disabled={savingTimes}
+            size="sm"
+            className="w-full"
+          >
+            {savingTimes ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : timesSaved ? (
+              <><Check className="h-4 w-4 mr-1" /> Gespeichert</>
+            ) : (
+              'Speichern'
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Abmelden */}
       <Button variant="outline" className="w-full" onClick={handleLogout}>

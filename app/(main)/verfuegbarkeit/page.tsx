@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { CalendarCheck, Vote } from 'lucide-react'
 import VerfuegbarkeitClient from './VerfuegbarkeitClient'
+import { DefaultTimes } from '@/lib/holidays'
 
 export default async function VerfuegbarkeitPage() {
   const supabase = await createClient()
@@ -50,6 +51,14 @@ export default async function VerfuegbarkeitPage() {
       ? [{ date: er.events.proposed_date, group_name: er.events.groups?.name ?? '' }]
       : []
   )
+
+  // Standard-Uhrzeiten aus Profil
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('default_availability_times')
+    .eq('id', user.id)
+    .single()
+  const defaultTimes = (profileData?.default_availability_times as DefaultTimes | null) ?? null
 
   // Gruppen des Nutzers ermitteln
   const { data: memberships } = await supabase
@@ -165,6 +174,7 @@ export default async function VerfuegbarkeitPage() {
           todayStr={todayStr}
           initialAvailability={availability ?? []}
           confirmedEvents={calendarEvents}
+          defaultTimes={defaultTimes}
         />
       </section>
     </div>

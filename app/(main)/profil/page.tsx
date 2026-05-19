@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProfilClient from './ProfilClient'
+import { DefaultTimes } from '@/lib/holidays'
 
 export default async function ProfilPage() {
   const supabase = await createClient()
@@ -9,7 +10,7 @@ export default async function ProfilPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, bgg_username, bgg_collection')
+    .select('id, display_name, bgg_username, bgg_collection, default_availability_times')
     .eq('id', user.id)
     .single()
 
@@ -35,10 +36,11 @@ export default async function ProfilPage() {
 
   return (
     <ProfilClient
-      profile={profile ?? { id: user.id, display_name: '', bgg_username: null, bgg_collection: null }}
+      profile={profile ?? { id: user.id, display_name: '', bgg_username: null, bgg_collection: null, default_availability_times: null }}
       email={user.email ?? ''}
       memberships={memberships}
       bggCollectionCount={Array.isArray(profile?.bgg_collection) ? (profile.bgg_collection as any[]).length : 0}
+      defaultTimes={(profile?.default_availability_times as DefaultTimes | null) ?? null}
     />
   )
 }

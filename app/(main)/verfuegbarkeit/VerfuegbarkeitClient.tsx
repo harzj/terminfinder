@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import AvailabilityCalendar, { DayAvailability, ConfirmedEvent } from '@/components/AvailabilityCalendar'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { DefaultTimes } from '@/lib/holidays'
 
 interface Props {
   userId: string
@@ -11,9 +12,10 @@ interface Props {
   todayStr: string    // heutiges Datum
   initialAvailability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
+  defaultTimes?: DefaultTimes | null
 }
 
-export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents }: Props) {
+export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents, defaultTimes }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
   const [saveError, setSaveError] = useState<string | null>(null)
   const router = useRouter()
@@ -60,6 +62,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
       confirmedEvents={confirmedEvents}
       onSave={handleSave}
       onDelete={handleDelete}
+      defaultTimes={defaultTimes}
     />
     </>
   )

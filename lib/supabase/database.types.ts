@@ -15,6 +15,7 @@ export interface Database {
           display_name: string
           bgg_username: string | null
           bgg_collection: Json | null
+          default_availability_times: Json | null
           created_at: string
         }
         Insert: {
@@ -22,6 +23,7 @@ export interface Database {
           display_name: string
           bgg_username?: string | null
           bgg_collection?: Json | null
+          default_availability_times?: Json | null
           created_at?: string
         }
         Update: {
@@ -29,6 +31,7 @@ export interface Database {
           display_name?: string
           bgg_username?: string | null
           bgg_collection?: Json | null
+          default_availability_times?: Json | null
           created_at?: string
         }
         Relationships: []
