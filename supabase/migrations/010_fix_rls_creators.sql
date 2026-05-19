@@ -25,5 +25,4 @@ where g.created_by is not null
     select 1 from public.group_members gm
     where gm.group_id = g.id
       and gm.user_id = g.created_by
-  )
-on conflict (group_id, user_id) do nothing;
+  );
