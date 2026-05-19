@@ -86,6 +86,7 @@ export default function GruppenDetailClient({
             events={events}
             currentUserId={currentUserId}
             members={members}
+            availabilities={availabilities}
             bggCollection={bggCollection}
           />
         </TabsContent>

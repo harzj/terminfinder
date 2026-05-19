@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/client'
@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar, X } from 'lucide-react'
+import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar, X, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface BggCollectionItem {
@@ -25,6 +25,7 @@ interface Props {
   events: any[]
   currentUserId: string
   members: any[]
+  availabilities: any[]
   bggCollection?: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
 }
 
@@ -34,7 +35,15 @@ const RESPONSE_LABELS = {
   uncertain: { label: 'Unklar', icon: HelpCircle, color: 'text-yellow-500' },
 }
 
-export default function Abstimmungen({ group, events, currentUserId, members, bggCollection }: Props) {
+function computeOverlap(availabilities: any[], date: string): { from: string; until: string } | null {
+  const day = availabilities.filter(a => a.date === date && a.from_time && a.until_time)
+  if (day.length === 0) return null
+  const latestStart = day.reduce((max: string, a: any) => a.from_time > max ? a.from_time : max, '00:00')
+  const earliestEnd = day.reduce((min: string, a: any) => a.until_time < min ? a.until_time : min, '23:59')
+  return latestStart < earliestEnd ? { from: latestStart.slice(0, 5), until: earliestEnd.slice(0, 5) } : null
+}
+
+export default function Abstimmungen({ group, events, currentUserId, members, availabilities, bggCollection }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -42,15 +51,33 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
   const [newFrom, setNewFrom] = useState('')
   const [newUntil, setNewUntil] = useState('')
   const [newMin, setNewMin] = useState(group.min_participants)
+  const [newNote, setNewNote] = useState('')
   const [creating, setCreating] = useState(false)
+
+  // Zeitfenster-Vorschlag wenn Datum gewählt
+  const [overlapSuggestion, setOverlapSuggestion] = useState<{ from: string; until: string } | null>(null)
+
+  useEffect(() => {
+    if (!newDate) { setOverlapSuggestion(null); return }
+    const overlap = computeOverlap(availabilities, newDate)
+    setOverlapSuggestion(overlap)
+    if (overlap) {
+      setNewFrom(overlap.from)
+      setNewUntil(overlap.until)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newDate])
 
   // Spiele-Vorschlag
   const [selectedGames, setSelectedGames] = useState<BggCollectionItem[]>([])
   const [gameSearch, setGameSearch] = useState('')
 
-  const filteredGames = bggCollection && gameSearch.trim()
-    ? bggCollection.filter(g => g.name.toLowerCase().includes(gameSearch.trim().toLowerCase()))
+  const collectionResults = bggCollection && gameSearch.trim()
+    ? bggCollection.filter(g => g.name.toLowerCase().includes(gameSearch.trim().toLowerCase())).slice(0, 15)
     : []
+
+  const canAddManual = gameSearch.trim().length > 0 &&
+    !selectedGames.some(g => g.name.toLowerCase() === gameSearch.trim().toLowerCase())
 
   const toggleGame = (item: BggCollectionItem) => {
     setSelectedGames(prev =>
@@ -58,6 +85,14 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
         ? prev.filter(g => g.id !== item.id)
         : [...prev, item]
     )
+  }
+
+  const addManualGame = () => {
+    const name = gameSearch.trim()
+    if (!name) return
+    const fake: BggCollectionItem = { id: -(Date.now()), name, thumbnail_url: null }
+    setSelectedGames(prev => [...prev, fake])
+    setGameSearch('')
   }
 
   const handleResponse = async (eventId: string, response: 'accepted' | 'declined' | 'uncertain') => {
@@ -83,13 +118,14 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
       until_time: newUntil || null,
       min_participants: newMin,
       proposed_by: currentUserId,
+      notes: newNote.trim() || null,
     }).select().single()
 
     if (event && selectedGames.length > 0) {
       await supabase.from('event_games').insert(
         selectedGames.map(g => ({
           event_id: event.id,
-          bgg_id: g.id,
+          bgg_id: g.id > 0 ? g.id : null,
           name: g.name,
           thumbnail_url: g.thumbnail_url,
           added_by: currentUserId,
@@ -101,6 +137,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
     setDialogOpen(false)
     setSelectedGames([])
     setGameSearch('')
+    setNewNote('')
     router.refresh()
   }
 
@@ -113,7 +150,11 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
         <h2 className="font-semibold">Abstimmungen</h2>
         <Dialog open={dialogOpen} onOpenChange={(open) => {
           setDialogOpen(open)
-          if (!open) { setSelectedGames([]); setGameSearch('') }
+          if (!open) {
+            setSelectedGames([]); setGameSearch(''); setNewNote('')
+            setNewDate(''); setNewFrom(''); setNewUntil(''); setOverlapSuggestion(null)
+            setNewMin(group.min_participants)
+          }
         }}>
           <DialogTrigger render={<Button size="sm"><Plus className="h-4 w-4 mr-1" /> Termin vorschlagen</Button>} />
           <DialogContent>
@@ -127,73 +168,90 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="from">Von (optional)</Label>
-                  <Input id="from" type="time" value={newFrom} onChange={(e) => setNewFrom(e.target.value)} />
+                  <Label htmlFor="from">Von</Label>
+                  <Input id="from" type="time" value={newFrom} onChange={(e) => { setNewFrom(e.target.value); setOverlapSuggestion(null) }} />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="until">Bis (optional)</Label>
-                  <Input id="until" type="time" value={newUntil} onChange={(e) => setNewUntil(e.target.value)} />
+                  <Label htmlFor="until">Bis</Label>
+                  <Input id="until" type="time" value={newUntil} onChange={(e) => { setNewUntil(e.target.value); setOverlapSuggestion(null) }} />
                 </div>
               </div>
+              {overlapSuggestion && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1 -mt-1">
+                  <Clock className="h-3 w-3 shrink-0" />
+                  Gemeinsames Zeitfenster: {overlapSuggestion.from}–{overlapSuggestion.until} Uhr (automatisch eingetragen, anpassbar)
+                </p>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="min">Mindest-Teilnehmer</Label>
                 <Input id="min" type="number" min={2} max={20} value={newMin} onChange={(e) => setNewMin(Number(e.target.value))} />
               </div>
 
+              {/* Notiz */}
+              <div className="space-y-1">
+                <Label htmlFor="note">Notiz <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <textarea
+                  id="note"
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  placeholder="z.B. Spieleabend bei mir zuhause…"
+                  rows={2}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+
               {/* Spiele vorschlagen */}
-              {bggCollection && bggCollection.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Spiele vorschlagen <span className="text-muted-foreground font-normal">(optional)</span></Label>
-
-                  {/* Ausgewählte Spiele */}
-                  {selectedGames.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedGames.map(g => (
-                        <span
-                          key={g.id}
-                          className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5"
-                        >
-                          {g.name}
-                          <button type="button" onClick={() => toggleGame(g)} className="hover:text-destructive">
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
+              <div className="space-y-2">
+                <Label>Spiele vorschlagen <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                {selectedGames.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedGames.map(g => (
+                      <span key={g.id} className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5">
+                        {g.name}
+                        <button type="button" onClick={() => toggleGame(g)} className="hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
                   <Input
-                    placeholder="Sammlung durchsuchen…"
+                    placeholder={bggCollection && bggCollection.length > 0 ? 'Sammlung durchsuchen oder Namen eingeben…' : 'Spielname eingeben…'}
                     value={gameSearch}
                     onChange={e => setGameSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (collectionResults.length === 0 && canAddManual) addManualGame() } }}
                     autoComplete="off"
                   />
-                  {filteredGames.length > 0 && (
-                    <div className="max-h-40 overflow-y-auto border border-border rounded-md divide-y divide-border">
-                      {filteredGames.slice(0, 20).map(item => {
-                        const isSelected = selectedGames.some(g => g.id === item.id)
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => toggleGame(item)}
-                            className={cn(
-                              'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors',
-                              isSelected && 'bg-primary/5 font-medium'
-                            )}
-                          >
-                            {item.thumbnail_url && (
-                              <img src={item.thumbnail_url} alt="" className="h-7 w-7 object-cover rounded shrink-0" />
-                            )}
-                            <span className="flex-1 truncate">{item.name}</span>
-                            {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
-                          </button>
-                        )
-                      })}
-                    </div>
+                  {canAddManual && collectionResults.length === 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={addManualGame} className="shrink-0">
+                      <Plus className="h-4 w-4" />
+                    </Button>
                   )}
                 </div>
-              )}
+                {(collectionResults.length > 0 || (canAddManual && (bggCollection?.length ?? 0) > 0)) && (
+                  <div className="max-h-40 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                    {collectionResults.map(item => {
+                      const isSelected = selectedGames.some(g => g.id === item.id)
+                      return (
+                        <button key={item.id} type="button" onClick={() => toggleGame(item)}
+                          className={cn('w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors', isSelected && 'bg-primary/5 font-medium')}>
+                          {item.thumbnail_url && <img src={item.thumbnail_url} alt="" className="h-7 w-7 object-cover rounded shrink-0" />}
+                          <span className="flex-1 truncate">{item.name}</span>
+                          {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                        </button>
+                      )
+                    })}
+                    {canAddManual && (
+                      <button type="button" onClick={addManualGame}
+                        className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-muted transition-colors text-muted-foreground">
+                        <Plus className="h-4 w-4 shrink-0" />
+                        <span className="truncate">„{gameSearch.trim()}" manuell hinzufügen</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <Button type="submit" className="w-full" disabled={creating}>
                 {creating ? 'Vorschlagen…' : 'Abstimmung starten'}
@@ -257,6 +315,9 @@ export default function Abstimmungen({ group, events, currentUserId, members, bg
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Vorgeschlagen von {event.profiles?.display_name}
                   </p>
+                  {event.notes && (
+                    <p className="text-xs text-muted-foreground mt-1 italic">„{event.notes}"</p>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-sm font-bold text-green-600">{accepted.length}</span>

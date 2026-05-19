@@ -136,6 +136,7 @@ export interface Database {
           min_participants: number
           status: 'voting' | 'confirmed' | 'expired'
           proposed_by: string
+          notes: string | null
           created_at: string
         }
         Insert: {
@@ -147,6 +148,7 @@ export interface Database {
           min_participants?: number
           status?: 'voting' | 'confirmed' | 'expired'
           proposed_by: string
+          notes?: string | null
           created_at?: string
         }
         Update: {
@@ -158,6 +160,7 @@ export interface Database {
           min_participants?: number
           status?: 'voting' | 'confirmed' | 'expired'
           proposed_by?: string
+          notes?: string | null
           created_at?: string
         }
         Relationships: []
