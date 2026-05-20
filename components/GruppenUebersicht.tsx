@@ -21,10 +21,10 @@ const STATUS_CELL: Record<string, string> = {
 }
 
 export default function GruppenUebersicht({ members, availabilities, events, startDate, endDate, blockedDates, currentUserId }: Props) {
-  // Alle 28 Tage generieren
+  // Alle 35 Tage generieren (5 Wochen, synchron mit Verfügbarkeitskalender)
   const days: string[] = []
   const start = parseISO(startDate)
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 35; i++) {
     days.push(format(addDays(start, i), 'yyyy-MM-dd'))
   }
 

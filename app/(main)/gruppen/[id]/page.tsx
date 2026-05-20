@@ -49,19 +49,24 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   const bggCollection: Array<{ id: number; name: string; thumbnail_url: string | null }> | null =
     Array.isArray(currentUserProfile?.bgg_collection) ? currentUserProfile.bgg_collection : null
 
-  // Verfügbarkeiten aller Mitglieder für nächste 28 Tage
+  // Verfügbarkeiten aller Mitglieder: 5 Wochen ab Montag der aktuellen Woche (synchron mit Verfügbarkeitskalender)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const endDate = new Date(today)
-  endDate.setDate(endDate.getDate() + 27)
   const todayStr = today.toISOString().split('T')[0]
-  const endStr = endDate.toISOString().split('T')[0]
+  const dayOfWeek = today.getDay()
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() + daysToMonday)
+  const startStr = weekStart.toISOString().split('T')[0]
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 34)
+  const endStr = weekEnd.toISOString().split('T')[0]
 
   const { data: availabilities } = await supabase
     .from('availability')
     .select('user_id, date, status, from_time, until_time')
     .in('user_id', memberIds)
-    .gte('date', todayStr)
+    .gte('date', startStr)
     .lte('date', endStr)
 
   // Aktive Events der Gruppe laden
@@ -113,7 +118,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
       events={events ?? []}
       pastEvents={pastEvents ?? []}
       currentUserId={user.id}
-      startDate={todayStr}
+      startDate={startStr}
       endDate={endStr}
       blockedDates={blockedDates}
       bggUsername={bggUsername}
