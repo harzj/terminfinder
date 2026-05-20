@@ -34,6 +34,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
 
   // Dialog-State für den Vorschlagen-Dialog
   type OverlapItem = ReturnType<typeof computeOverlaps>[0]
+  const [sortIndex, setSortIndex] = useState<0 | 1 | 2>(0)
+
   const [dialogOverlap, setDialogOverlap] = useState<OverlapItem | null>(null)
   const [dialogFrom, setDialogFrom] = useState('')
   const [dialogUntil, setDialogUntil] = useState('')
@@ -76,8 +78,34 @@ export default function NaechsteTermine({ group, availabilities, members, startD
     }))
     return computeOverlaps(
       enriched, memberProfiles as any, group.min_participants, parseISO(startDate), parseISO(endDate)
-    ).filter(o => !existingEventDates.has(o.date) && !blockedDateSet.has(o.date)).slice(0, 10)
+    ).filter(o => !existingEventDates.has(o.date) && !blockedDateSet.has(o.date))
   }, [availabilities, members, group.min_participants, startDate, endDate, existingEventDates, blockedDateSet])
+
+  const sortedOverlaps = useMemo(() => {
+    const sorted = [...overlaps]
+    if (sortIndex === 1) {
+      // Zustimmung: confirmed DESC → uncertain DESC → date ASC
+      sorted.sort((a, b) => {
+        if (b.confirmed_participants.length !== a.confirmed_participants.length)
+          return b.confirmed_participants.length - a.confirmed_participants.length
+        if (b.uncertain_participants.length !== a.uncertain_participants.length)
+          return b.uncertain_participants.length - a.uncertain_participants.length
+        return a.date < b.date ? -1 : 1
+      })
+    } else if (sortIndex === 2) {
+      // Potential: (confirmed+uncertain) DESC → confirmed DESC → date ASC
+      sorted.sort((a, b) => {
+        const potA = a.confirmed_participants.length + a.uncertain_participants.length
+        const potB = b.confirmed_participants.length + b.uncertain_participants.length
+        if (potB !== potA) return potB - potA
+        if (b.confirmed_participants.length !== a.confirmed_participants.length)
+          return b.confirmed_participants.length - a.confirmed_participants.length
+        return a.date < b.date ? -1 : 1
+      })
+    }
+    // sortIndex === 0 (Datum): computeOverlaps already returns chronological order
+    return sorted.slice(0, 10)
+  }, [overlaps, sortIndex])
 
   const openDialog = (overlap: OverlapItem) => {
     setDialogOverlap(overlap)
@@ -137,10 +165,27 @@ export default function NaechsteTermine({ group, availabilities, members, startD
   return (
     <>
       <div className="space-y-3">
+        {/* Sortier-Schieberegler */}
+        <div className="space-y-1 pb-1">
+          <div className="flex justify-between text-xs font-medium">
+            <span className={sortIndex === 0 ? 'text-primary' : 'text-muted-foreground'}>Datum</span>
+            <span className={sortIndex === 1 ? 'text-primary' : 'text-muted-foreground'}>Zustimmung</span>
+            <span className={sortIndex === 2 ? 'text-primary' : 'text-muted-foreground'}>Potential</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={2}
+            step={1}
+            value={sortIndex}
+            onChange={e => setSortIndex(Number(e.target.value) as 0 | 1 | 2)}
+            className="w-full accent-primary cursor-pointer"
+          />
+        </div>
         <p className="text-sm text-muted-foreground">
           Tage, an denen mindestens {group.min_participants} Mitglieder verfügbar sind:
         </p>
-        {overlaps.map((overlap) => (
+        {sortedOverlaps.map((overlap) => (
           <Card key={overlap.date}>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">

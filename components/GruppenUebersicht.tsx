@@ -45,10 +45,10 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
 
   return (
     <div className="overflow-x-auto -mx-4 px-4">
-      <div style={{ minWidth: `${Math.max(members.length * 48 + 80, 300)}px` }}>
+      <div style={{ minWidth: `${80 + days.length * 32}px` }}>
         {/* Header: Tage */}
         <div className="grid mb-1" style={{ gridTemplateColumns: `80px repeat(${days.length}, 32px)` }}>
-          <div />
+          <div className="sticky left-0 z-10 bg-background" />
           {days.map((d) => (
             <div key={d} className="text-center">
               <div className="text-[9px] text-muted-foreground leading-none">
@@ -72,7 +72,7 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
               className="grid items-center mb-1"
               style={{ gridTemplateColumns: `80px repeat(${days.length}, 32px)` }}
             >
-              <div className="text-xs truncate pr-2 text-muted-foreground" title={name}>
+              <div className="sticky left-0 z-10 bg-background text-xs truncate pr-2 pl-1 text-muted-foreground" title={name}>
                 {name}
               </div>
               {days.map((d) => {
