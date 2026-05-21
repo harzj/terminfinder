@@ -39,13 +39,17 @@ function parseDTValue(value: string): { date: string; time: string | null } | nu
 /**
  * Expand a range [start, end) of yyyy-MM-dd dates, one entry per day.
  * Used for all-day events where DTEND is the exclusive end per RFC 5545.
+ * Uses local date arithmetic (noon anchor) to avoid UTC-offset day shifts.
  */
 function expandDateRange(start: string, end: string): string[] {
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const dates: string[] = []
-  const d = new Date(start + 'T00:00:00')
-  const endD = new Date(end + 'T00:00:00')
+  // Anchor at noon to survive DST transitions without crossing a date boundary
+  const d = new Date(start + 'T12:00:00')
+  const endD = new Date(end + 'T12:00:00')
   while (d < endD) {
-    dates.push(d.toISOString().slice(0, 10))
+    dates.push(fmt(d))
     d.setDate(d.getDate() + 1)
   }
   return dates.length > 0 ? dates : [start]
