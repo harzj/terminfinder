@@ -24,12 +24,12 @@ export interface BusyEvent {
 
 function parseDTValue(value: string): { date: string; time: string | null } | null {
   const v = value.trim()
-  // All-day: YYYYMMDD
+  // All-day: YYYYMMDD (exactly 8 digits, no T)
   if (/^\d{8}$/.test(v)) {
     return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}`, time: null }
   }
-  // DateTime: YYYYMMDDTHHmmss[Z]
-  const m = v.match(/^(\d{8})T(\d{2})(\d{2})\d{2}Z?$/)
+  // DateTime: YYYYMMDDTHHmm… — lenient: accept any suffix (Z, seconds, fractional, +offset)
+  const m = v.match(/^(\d{8})T(\d{2})(\d{2})/)
   if (m) {
     return { date: `${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}`, time: `${m[2]}:${m[3]}` }
   }
