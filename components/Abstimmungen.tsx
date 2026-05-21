@@ -106,7 +106,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
       .eq('event_id', eventId)
       .eq('user_id', currentUserId)
       .maybeSingle()
-    const current = currentRaw as any
+    const current = currentRaw
 
     const currentResponse = current?.response ?? null
     let newPreviousResponse: string | null
@@ -119,7 +119,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     }
 
     await supabase.from('event_responses').upsert(
-      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() } as any,
+      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() },
       { onConflict: 'event_id,user_id' }
     )
     setLoading(null)

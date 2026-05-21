@@ -19,7 +19,7 @@ export async function GET(
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, display_name')
-    .eq('calendar_token', token as any)
+    .eq('calendar_token', token)
     .maybeSingle()
 
   if (!profile) {

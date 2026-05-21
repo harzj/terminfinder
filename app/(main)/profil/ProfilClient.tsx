@@ -147,7 +147,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const handleSaveImportUrl = async () => {
     setSavingImportUrl(true)
     const supabase = createClient()
-    await (supabase as any).from('profiles').update({ calendar_import_url: importUrl.trim() || null }).eq('id', profile.id)
+    await supabase.from('profiles').update({ calendar_import_url: importUrl.trim() || null }).eq('id', profile.id)
     setSavingImportUrl(false)
     setImportUrlSaved(true)
     setTimeout(() => setImportUrlSaved(false), 2000)

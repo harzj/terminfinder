@@ -17,6 +17,8 @@ export interface Database {
           bgg_collection: Json | null
           default_availability_times: Json | null
           created_at: string
+          calendar_token: string
+          calendar_import_url: string | null
         }
         Insert: {
           id: string
@@ -25,6 +27,8 @@ export interface Database {
           bgg_collection?: Json | null
           default_availability_times?: Json | null
           created_at?: string
+          calendar_token?: string
+          calendar_import_url?: string | null
         }
         Update: {
           id?: string
@@ -33,6 +37,8 @@ export interface Database {
           bgg_collection?: Json | null
           default_availability_times?: Json | null
           created_at?: string
+          calendar_token?: string
+          calendar_import_url?: string | null
         }
         Relationships: []
       }
@@ -171,6 +177,7 @@ export interface Database {
           event_id: string
           user_id: string
           response: 'accepted' | 'declined' | 'uncertain'
+          previous_response: 'accepted' | 'declined' | 'uncertain' | null
           updated_at: string
         }
         Insert: {
@@ -178,6 +185,7 @@ export interface Database {
           event_id: string
           user_id: string
           response?: 'accepted' | 'declined' | 'uncertain'
+          previous_response?: 'accepted' | 'declined' | 'uncertain' | null
           updated_at?: string
         }
         Update: {
@@ -185,6 +193,7 @@ export interface Database {
           event_id?: string
           user_id?: string
           response?: 'accepted' | 'declined' | 'uncertain'
+          previous_response?: 'accepted' | 'declined' | 'uncertain' | null
           updated_at?: string
         }
         Relationships: []
