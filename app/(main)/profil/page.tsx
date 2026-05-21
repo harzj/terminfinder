@@ -10,7 +10,7 @@ export default async function ProfilPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, bgg_username, bgg_collection, default_availability_times')
+    .select('id, display_name, bgg_username, bgg_collection, default_availability_times, calendar_token, calendar_import_url')
     .eq('id', user.id)
     .single()
 
@@ -41,6 +41,8 @@ export default async function ProfilPage() {
       memberships={memberships}
       bggCollectionCount={Array.isArray(profile?.bgg_collection) ? (profile.bgg_collection as any[]).length : 0}
       defaultTimes={(profile?.default_availability_times as DefaultTimes | null) ?? null}
+      calendarToken={(profile as any)?.calendar_token ?? ''}
+      calendarImportUrl={(profile as any)?.calendar_import_url ?? null}
     />
   )
 }

@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import AvailabilityCalendar, { DayAvailability, ConfirmedEvent } from '@/components/AvailabilityCalendar'
+import CalendarImport from '@/components/CalendarImport'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { DefaultTimes } from '@/lib/holidays'
+import { DefaultTimes, getDayType } from '@/lib/holidays'
+import { Button } from '@/components/ui/button'
+import { CalendarDays } from 'lucide-react'
 
 interface Props {
   userId: string
@@ -18,7 +21,7 @@ interface Props {
 export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents, defaultTimes }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const router = useRouter()
+  const [importOpen, setImportOpen] = useState(false)
 
   const handleSave = async (day: DayAvailability) => {
     setSaveError(null)
@@ -48,6 +51,35 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
     setAvailability((prev) => prev.filter((a) => a.date !== date))
   }
 
+  const handleImport = async (days: DayAvailability[], toDelete: string[]) => {
+    const supabase = createClient()
+
+    // Save new availability entries in parallel
+    if (days.length > 0) {
+      await supabase.from('availability').upsert(
+        days.map(d => ({ user_id: userId, date: d.date, status: d.status!, from_time: d.from_time, until_time: d.until_time })),
+        { onConflict: 'user_id,date' }
+      )
+    }
+
+    // Delete removed entries
+    if (toDelete.length > 0) {
+      await supabase.from('availability').delete().eq('user_id', userId).in('date', toDelete)
+    }
+
+    // Refresh local state
+    const { data: fresh } = await supabase
+      .from('availability')
+      .select('date, status, from_time, until_time')
+      .eq('user_id', userId)
+    setAvailability(fresh ?? [])
+  }
+
+  // Determine default times for import (first available day type)
+  const firstDefaultTimes = defaultTimes
+    ? (defaultTimes.workday ?? defaultTimes.free_day ?? null)
+    : null
+
   return (
     <>
       {saveError && (
@@ -56,14 +88,32 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
         </div>
       )}
       <AvailabilityCalendar
-      startDate={startDate}
-      todayStr={todayStr}
-      availability={availability}
-      confirmedEvents={confirmedEvents}
-      onSave={handleSave}
-      onDelete={handleDelete}
-      defaultTimes={defaultTimes}
-    />
+        startDate={startDate}
+        todayStr={todayStr}
+        availability={availability}
+        confirmedEvents={confirmedEvents}
+        onSave={handleSave}
+        onDelete={handleDelete}
+        defaultTimes={defaultTimes}
+      />
+
+      <div className="mt-4">
+        <Button variant="outline" size="sm" className="w-full" onClick={() => setImportOpen(true)}>
+          <CalendarDays className="h-4 w-4 mr-2" />
+          Kalender importieren
+        </Button>
+      </div>
+
+      <CalendarImport
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        startDate={startDate}
+        todayStr={todayStr}
+        existingAvailability={availability}
+        defaultFromTime={firstDefaultTimes?.start ?? null}
+        defaultUntilTime={firstDefaultTimes?.end ?? null}
+        onImport={handleImport}
+      />
     </>
   )
 }
