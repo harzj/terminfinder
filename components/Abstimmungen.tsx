@@ -119,7 +119,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     }
 
     await supabase.from('event_responses').upsert(
-      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() },
+      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() } as any,
       { onConflict: 'event_id,user_id' }
     )
     setLoading(null)
