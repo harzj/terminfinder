@@ -197,14 +197,12 @@ export default function NaechsteTermine({ group, availabilities, members, startD
               </p>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1 items-center">
                 {overlap.confirmed_participants.map((p) => (
-                  <Badge key={p.id} className="bg-green-500 text-xs">{p.display_name}</Badge>
+                  <span key={p.id} className="w-4 h-4 rounded-full bg-green-500 inline-block" title={p.display_name} />
                 ))}
                 {overlap.uncertain_participants.map((p) => (
-                  <Badge key={p.id} variant="outline" className="text-yellow-600 border-yellow-400 text-xs">
-                    {p.display_name} (unklar)
-                  </Badge>
+                  <span key={p.id} className="w-4 h-4 rounded-full bg-yellow-400 inline-block" title={p.display_name} />
                 ))}
               </div>
               <Button size="sm" variant="outline" className="w-full" onClick={() => openDialog(overlap)}>

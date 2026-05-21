@@ -4,7 +4,7 @@ import { format, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
-import { CalendarCheck } from 'lucide-react'
+import { CalendarCheck, AlertTriangle } from 'lucide-react'
 import VerfuegbarkeitClient from './VerfuegbarkeitClient'
 import LaufendeAbstimmungen from './LaufendeAbstimmungen'
 import { DefaultTimes } from '@/lib/holidays'
@@ -74,7 +74,7 @@ export default async function VerfuegbarkeitPage() {
   const upcomingConfirmed = groupIds.length > 0
     ? (await supabase
         .from('events')
-        .select('id, group_id, proposed_date, from_time, until_time, groups(id, name)')
+        .select('id, group_id, proposed_date, from_time, until_time, groups(id, name), event_responses(user_id, response, previous_response)')
         .in('group_id', groupIds)
         .eq('status', 'confirmed')
         .gte('proposed_date', todayStr)
@@ -106,12 +106,17 @@ export default async function VerfuegbarkeitPage() {
             <CalendarCheck className="h-4 w-4 text-green-600" /> Nächste Termine
           </h2>
           <div className="space-y-2">
-            {upcomingConfirmed.map((event: any) => (
+            {upcomingConfirmed.map((event: any) => {
+              const hasChanges = (event.event_responses ?? []).some(
+                (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
+              )
+              return (
               <Link key={event.id} href={`/gruppen/${event.group_id}`}>
                 <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium text-sm">
+                    <p className="font-medium text-sm flex items-center gap-1.5">
                       {format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de })}
+                      {hasChanges && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
                     </p>
                     {event.from_time && (
                       <p className="text-xs text-muted-foreground">
@@ -122,7 +127,7 @@ export default async function VerfuegbarkeitPage() {
                   <Badge className="bg-green-600 shrink-0 text-xs">{event.groups?.name ?? ''}</Badge>
                 </div>
               </Link>
-            ))}
+            )})
           </div>
         </section>
       )}

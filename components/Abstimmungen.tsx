@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar, X, Clock } from 'lucide-react'
+import { CheckCircle2, XCircle, HelpCircle, Plus, Calendar, X, Clock, AlertTriangle, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface BggCollectionItem {
@@ -98,8 +98,27 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   const handleResponse = async (eventId: string, response: 'accepted' | 'declined' | 'uncertain') => {
     setLoading(eventId + response)
     const supabase = createClient()
+
+    // Fetch current response to track changes away from 'accepted'
+    const { data: current } = await supabase
+      .from('event_responses')
+      .select('response, previous_response')
+      .eq('event_id', eventId)
+      .eq('user_id', currentUserId)
+      .maybeSingle()
+
+    const currentResponse = current?.response ?? null
+    let newPreviousResponse: string | null
+    if (response === 'accepted') {
+      newPreviousResponse = null  // re-accepting clears the change flag
+    } else if (currentResponse === 'accepted') {
+      newPreviousResponse = 'accepted'  // was accepted, now changing away
+    } else {
+      newPreviousResponse = current?.previous_response ?? null  // preserve existing flag
+    }
+
     await supabase.from('event_responses').upsert(
-      { event_id: eventId, user_id: currentUserId, response, updated_at: new Date().toISOString() },
+      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() },
       { onConflict: 'event_id,user_id' }
     )
     setLoading(null)
@@ -143,6 +162,9 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
 
   const votingEvents = events.filter((e: any) => e.status === 'voting')
   const confirmedEvents = events.filter((e: any) => e.status === 'confirmed')
+  const allEvents = [...confirmedEvents, ...votingEvents].sort((a: any, b: any) =>
+    a.proposed_date < b.proposed_date ? -1 : 1
+  )
 
   return (
     <div className="space-y-4">
@@ -285,7 +307,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         </div>
       )}
 
-      {votingEvents.length === 0 && confirmedEvents.length === 0 && (
+      {allEvents.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
           <p className="text-sm">Noch keine Abstimmungen</p>
@@ -293,14 +315,22 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         </div>
       )}
 
-      {votingEvents.map((event: any) => {
+      {allEvents.map((event: any) => {
         const myResponse = event.event_responses?.find((r: any) => r.user_id === currentUserId)
         const accepted = event.event_responses?.filter((r: any) => r.response === 'accepted') ?? []
         const declined = event.event_responses?.filter((r: any) => r.response === 'declined') ?? []
         const uncertain = event.event_responses?.filter((r: any) => r.response === 'uncertain') ?? []
+        const isThresholdMet = accepted.length >= event.min_participants
+        const changedParticipants = (event.event_responses ?? []).filter(
+          (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
+        )
+        const thresholdDropped = event.status === 'confirmed' && !isThresholdMet
 
         return (
-          <Card key={event.id}>
+          <Card key={event.id} className={cn(
+            event.status === 'confirmed' && isThresholdMet && !thresholdDropped && 'border-green-500 border-2',
+            thresholdDropped && 'border-red-500 border-2',
+          )}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -320,12 +350,33 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-sm font-bold text-green-600">{accepted.length}</span>
+                  <span className={cn('text-sm font-bold', isThresholdMet ? 'text-green-600' : 'text-muted-foreground')}>
+                    {accepted.length}
+                  </span>
                   <span className="text-xs text-muted-foreground">/{event.min_participants} nötig</span>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Warnhinweise */}
+              {changedParticipants.length > 0 && (
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2 text-xs text-amber-800">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+                  <span>
+                    {changedParticipants.length === 1
+                      ? '1 Teilnehmer hat seine Verfügbarkeit wieder verändert.'
+                      : `${changedParticipants.length} Teilnehmer haben ihre Verfügbarkeit wieder verändert.`
+                    }{' '}Bitte prüfen!
+                  </span>
+                </div>
+              )}
+              {thresholdDropped && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2 text-xs text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                  <span>Die Mindestteilnehmerzahl wurde durch Änderungen unterschritten. Bitte prüfen!</span>
+                </div>
+              )}
+
               {/* Teilnehmer-Übersicht */}
               <div className="flex flex-wrap gap-1">
                 {accepted.map((r: any) => (
@@ -333,12 +384,22 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     {r.profiles?.display_name}
                   </Badge>
                 ))}
-                {uncertain.map((r: any) => (
+                {uncertain.filter((r: any) => r.previous_response === 'accepted').map((r: any) => (
+                  <Badge key={r.user_id} variant="outline" className="text-red-600 border-yellow-400 text-xs font-semibold">
+                    {r.profiles?.display_name}
+                  </Badge>
+                ))}
+                {uncertain.filter((r: any) => r.previous_response !== 'accepted').map((r: any) => (
                   <Badge key={r.user_id} variant="outline" className="text-yellow-600 border-yellow-400 text-xs">
                     {r.profiles?.display_name}
                   </Badge>
                 ))}
-                {declined.map((r: any) => (
+                {declined.filter((r: any) => r.previous_response === 'accepted').map((r: any) => (
+                  <Badge key={r.user_id} className="bg-red-500 text-white text-xs font-semibold">
+                    {r.profiles?.display_name}
+                  </Badge>
+                ))}
+                {declined.filter((r: any) => r.previous_response !== 'accepted').map((r: any) => (
                   <Badge key={r.user_id} variant="outline" className="text-muted-foreground text-xs line-through">
                     {r.profiles?.display_name}
                   </Badge>
