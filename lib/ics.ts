@@ -36,6 +36,21 @@ function parseDTValue(value: string): { date: string; time: string | null } | nu
   return null
 }
 
+/**
+ * Expand a range [start, end) of yyyy-MM-dd dates, one entry per day.
+ * Used for all-day events where DTEND is the exclusive end per RFC 5545.
+ */
+function expandDateRange(start: string, end: string): string[] {
+  const dates: string[] = []
+  const d = new Date(start + 'T00:00:00')
+  const endD = new Date(end + 'T00:00:00')
+  while (d < endD) {
+    dates.push(d.toISOString().slice(0, 10))
+    d.setDate(d.getDate() + 1)
+  }
+  return dates.length > 0 ? dates : [start]
+}
+
 /** Extracts all busy events with optional start/end times from an ICS string. */
 export function parseICSEvents(text: string): BusyEvent[] {
   const unfolded = text.replace(/\r?\n[ \t]/g, '')
@@ -51,12 +66,18 @@ export function parseICSEvents(text: string): BusyEvent[] {
     if (line === 'END:VEVENT') {
       inEvent = false
       if (dtstart) {
-        results.push({
-          date: dtstart.date,
-          allDay: dtstart.time === null,
-          startTime: dtstart.time,
-          endTime: dtend?.time ?? null,
-        })
+        if (dtstart.time === null) {
+          // All-day event: DTEND is exclusive end per RFC 5545 → expand to cover every day
+          const dates = dtend?.time === null ? expandDateRange(dtstart.date, dtend.date) : [dtstart.date]
+          dates.forEach(date => results.push({ date, allDay: true, startTime: null, endTime: null }))
+        } else {
+          results.push({
+            date: dtstart.date,
+            allDay: false,
+            startTime: dtstart.time,
+            endTime: dtend?.time ?? null,
+          })
+        }
       }
       continue
     }
