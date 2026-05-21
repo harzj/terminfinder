@@ -5,7 +5,7 @@ import AvailabilityCalendar, { DayAvailability, ConfirmedEvent } from '@/compone
 import CalendarImport from '@/components/CalendarImport'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { DefaultTimes, getDayType } from '@/lib/holidays'
+import { DefaultTimes } from '@/lib/holidays'
 import { Button } from '@/components/ui/button'
 import { CalendarDays } from 'lucide-react'
 
