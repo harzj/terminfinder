@@ -127,7 +127,8 @@ export default async function VerfuegbarkeitPage() {
                   <Badge className="bg-green-600 shrink-0 text-xs">{event.groups?.name ?? ''}</Badge>
                 </div>
               </Link>
-            )})
+            )
+            })}
           </div>
         </section>
       )}
