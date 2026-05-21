@@ -8,11 +8,12 @@ export default async function ProfilPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/anmelden')
 
-  const { data: profile } = await supabase
+  const { data: profileRaw } = await supabase
     .from('profiles')
     .select('id, display_name, bgg_username, bgg_collection, default_availability_times, calendar_token, calendar_import_url')
     .eq('id', user.id)
     .single()
+  const profile = profileRaw as any
 
   // Gruppen-Mitgliedschaften mit per-Gruppen-Name
   const { data: rawMemberships } = await supabase
@@ -41,8 +42,8 @@ export default async function ProfilPage() {
       memberships={memberships}
       bggCollectionCount={Array.isArray(profile?.bgg_collection) ? (profile.bgg_collection as any[]).length : 0}
       defaultTimes={(profile?.default_availability_times as DefaultTimes | null) ?? null}
-      calendarToken={(profile as any)?.calendar_token ?? ''}
-      calendarImportUrl={(profile as any)?.calendar_import_url ?? null}
+      calendarToken={profile?.calendar_token ?? ''}
+      calendarImportUrl={profile?.calendar_import_url ?? null}
     />
   )
 }
