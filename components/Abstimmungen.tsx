@@ -109,7 +109,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     const current = currentRaw
 
     const currentResponse = current?.response ?? null
-    let newPreviousResponse: string | null
+    let newPreviousResponse: 'accepted' | 'declined' | 'uncertain' | null
     if (response === 'accepted') {
       newPreviousResponse = null  // re-accepting clears the change flag
     } else if (currentResponse === 'accepted') {
