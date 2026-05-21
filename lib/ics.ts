@@ -1,6 +1,6 @@
 /**
  * ICS parsing and generation utilities.
- * No external dependencies — hand-rolled parser for VEVENT/DTSTART.
+ * No external dependencies — hand-rolled parser for VEVENT/DTSTART/DTEND.
  */
 
 // ── Parser ──────────────────────────────────────────────────────────────────
@@ -11,37 +11,66 @@
  * RRULE (recurring events) are NOT expanded — only DTSTART is used.
  */
 export function parseICS(text: string): string[] {
-  const dates = new Set<string>()
+  return parseICSEvents(text).map(e => e.date)
+}
 
-  // Unfold long lines (RFC 5545: continuation lines start with space or tab)
+/** A busy event parsed from an ICS VEVENT block. */
+export interface BusyEvent {
+  date: string          // yyyy-MM-dd (from DTSTART)
+  allDay: boolean
+  startTime: string | null  // HH:MM
+  endTime: string | null    // HH:MM
+}
+
+function parseDTValue(value: string): { date: string; time: string | null } | null {
+  const v = value.trim()
+  // All-day: YYYYMMDD
+  if (/^\d{8}$/.test(v)) {
+    return { date: `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}`, time: null }
+  }
+  // DateTime: YYYYMMDDTHHmmss[Z]
+  const m = v.match(/^(\d{8})T(\d{2})(\d{2})\d{2}Z?$/)
+  if (m) {
+    return { date: `${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}`, time: `${m[2]}:${m[3]}` }
+  }
+  return null
+}
+
+/** Extracts all busy events with optional start/end times from an ICS string. */
+export function parseICSEvents(text: string): BusyEvent[] {
   const unfolded = text.replace(/\r?\n[ \t]/g, '')
-
   const lines = unfolded.split(/\r?\n/)
-
+  const results: BusyEvent[] = []
   let inEvent = false
+  let dtstart: { date: string; time: string | null } | null = null
+  let dtend: { date: string; time: string | null } | null = null
+
   for (const raw of lines) {
     const line = raw.trim()
-    if (line === 'BEGIN:VEVENT') { inEvent = true; continue }
-    if (line === 'END:VEVENT') { inEvent = false; continue }
-    if (!inEvent) continue
-
-    // Match DTSTART lines: DTSTART, DTSTART;VALUE=DATE, DTSTART;TZID=...
-    if (line.startsWith('DTSTART')) {
-      const colonIdx = line.indexOf(':')
-      if (colonIdx === -1) continue
-      const value = line.slice(colonIdx + 1).trim()
-      // Extract just the date portion (first 8 chars = YYYYMMDD)
-      const raw8 = value.replace('T', '').slice(0, 8)
-      if (/^\d{8}$/.test(raw8)) {
-        const yyyy = raw8.slice(0, 4)
-        const mm   = raw8.slice(4, 6)
-        const dd   = raw8.slice(6, 8)
-        dates.add(`${yyyy}-${mm}-${dd}`)
+    if (line === 'BEGIN:VEVENT') { inEvent = true; dtstart = null; dtend = null; continue }
+    if (line === 'END:VEVENT') {
+      inEvent = false
+      if (dtstart) {
+        results.push({
+          date: dtstart.date,
+          allDay: dtstart.time === null,
+          startTime: dtstart.time,
+          endTime: dtend?.time ?? null,
+        })
       }
+      continue
+    }
+    if (!inEvent) continue
+    if (line.startsWith('DTSTART')) {
+      const ci = line.indexOf(':')
+      if (ci !== -1) dtstart = parseDTValue(line.slice(ci + 1))
+    }
+    if (line.startsWith('DTEND')) {
+      const ci = line.indexOf(':')
+      if (ci !== -1) dtend = parseDTValue(line.slice(ci + 1))
     }
   }
-
-  return Array.from(dates)
+  return results
 }
 
 // ── Generator ─────────────────────────────────────────────────────────────

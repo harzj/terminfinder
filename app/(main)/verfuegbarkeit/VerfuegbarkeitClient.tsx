@@ -75,10 +75,6 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
     setAvailability(fresh ?? [])
   }
 
-  // Default times for import sheet — use workday start and workday end as sensible defaults
-  const importFromTime = defaultTimes?.start_werktag ?? null
-  const importUntilTime = defaultTimes?.ende_next_workday ?? null
-
   return (
     <>
       {saveError && (
@@ -109,8 +105,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
         startDate={startDate}
         todayStr={todayStr}
         existingAvailability={availability}
-        defaultFromTime={importFromTime}
-        defaultUntilTime={importUntilTime}
+        defaultTimes={defaultTimes}
         onImport={handleImport}
       />
     </>

@@ -446,8 +446,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         todayStr={new Date().toISOString().split('T')[0]}
         existingAvailability={[]}
         initialUrl={importUrl.trim() || null}
-        defaultFromTime={null}
-        defaultUntilTime={null}
+        defaultTimes={timesEnabled ? { start_frei: startFrei, start_werktag: startWerktag, ende_next_workday: endeNextWorkday, ende_next_free: endeNextFree } : null}
         onImport={handleProfileImport}
       />
     </div>

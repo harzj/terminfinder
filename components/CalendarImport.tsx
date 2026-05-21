@@ -6,10 +6,10 @@ import { de } from 'date-fns/locale'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { parseICS } from '@/lib/ics'
+import { parseICSEvents, BusyEvent } from '@/lib/ics'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
+import { DefaultTimes, getTimesForDate } from '@/lib/holidays'
 import { Upload, Link2, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
 
 interface Props {
@@ -19,38 +19,96 @@ interface Props {
   todayStr: string
   existingAvailability: DayAvailability[]
   initialUrl?: string | null
-  defaultFromTime?: string | null
-  defaultUntilTime?: string | null
+  defaultTimes?: DefaultTimes | null
   onImport: (days: DayAvailability[], toDelete: string[]) => Promise<void>
 }
 
 type Tab = 'file' | 'url'
+type DayState = 'green' | 'yellow' | 'red' | 'violet' | 'dark_green' | 'orange'
+type FilterMode = 'alle' | 'alles' | 'nichts'
+type OverlapType = 'none' | 'front' | 'back' | 'full'
 
 interface PreviewDay {
   date: string
-  label: string           // "Mo, 25. Mai"
-  action: 'add' | 'remove' | 'keep'
+  label: string
+  icsEvent: BusyEvent | null
+  overlapType: OverlapType
+  adjustedStart: string | null  // for 'front' overlap
+  adjustedEnd: string | null    // for 'back' overlap
+  state: DayState
+  selected: boolean
   hadEntry: boolean
-  included: boolean       // user toggle
 }
 
+const STATE_STYLE: Record<DayState, { dot: string; label: string }> = {
+  green:      { dot: 'bg-green-500',  label: 'verfügbar' },
+  yellow:     { dot: 'bg-yellow-400', label: 'unklar' },
+  red:        { dot: 'bg-red-500',    label: 'nicht verfügbar' },
+  violet:     { dot: 'bg-purple-500', label: 'Termin (nicht verfügbar)' },
+  dark_green: { dot: 'bg-green-800',  label: 'verfügbar (nach Termin)' },
+  orange:     { dot: 'bg-orange-500', label: 'unklar (nach Termin)' },
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function toMin(hhmm: string): number {
+  const [h, m = '0'] = hhmm.split(':')
+  return Number(h) * 60 + Number(m)
+}
+function fromMin(min: number): string {
+  const c = Math.max(0, Math.min(min, 23 * 60 + 59))
+  return `${String(Math.floor(c / 60)).padStart(2, '0')}:${String(c % 60).padStart(2, '0')}`
+}
+
+function detectOverlap(event: BusyEvent, defStart: string, defEnd: string): {
+  type: OverlapType; adjustedStart: string | null; adjustedEnd: string | null
+} {
+  if (event.allDay || !event.startTime || !event.endTime)
+    return { type: 'full', adjustedStart: null, adjustedEnd: null }
+  const evS = toMin(event.startTime), evE = toMin(event.endTime)
+  const defS = toMin(defStart), defE = toMin(defEnd)
+  if (evE <= defS || evS >= defE)         return { type: 'none', adjustedStart: null, adjustedEnd: null }
+  if (evS <= defS && evE >= defE)         return { type: 'full', adjustedStart: null, adjustedEnd: null }
+  if (evS >= defS && evE <= defE)         return { type: 'full', adjustedStart: null, adjustedEnd: null } // inside window
+  if (evS < defS)                         return { type: 'front', adjustedStart: fromMin(evE + 60), adjustedEnd: null }
+  return                                         { type: 'back',  adjustedStart: null, adjustedEnd: fromMin(evS - 60) }
+}
+
+function initialState(event: BusyEvent | null, overlap: OverlapType): DayState {
+  if (!event) return 'green'
+  if (overlap === 'full') return 'red'
+  if (overlap === 'none') return 'yellow'
+  return 'violet'
+}
+
+function cycleState(cur: DayState, overlap: OverlapType): DayState {
+  if (overlap === 'front' || overlap === 'back') {
+    const c: DayState[] = ['violet', 'dark_green', 'orange']
+    return c[(c.indexOf(cur) + 1) % 3]
+  }
+  const c: DayState[] = ['green', 'yellow', 'red']
+  return c[(c.indexOf(cur) + 1) % 3]
+}
+
+function applyFilter(days: PreviewDay[], mode: FilterMode): PreviewDay[] {
+  return days.map(d => ({
+    ...d,
+    selected: mode === 'alles' ? true
+      : mode === 'nichts' ? false
+      : d.icsEvent !== null && d.hadEntry,   // 'alle': only ICS-busy + had app entry
+  }))
+}
+
+
 export default function CalendarImport({
-  open,
-  onOpenChange,
-  startDate,
-  todayStr,
-  existingAvailability,
-  initialUrl,
-  defaultFromTime,
-  defaultUntilTime,
-  onImport,
+  open, onOpenChange, startDate, todayStr, existingAvailability, initialUrl, defaultTimes, onImport,
 }: Props) {
   const [tab, setTab] = useState<Tab>(() => initialUrl ? 'url' : 'file')
   const [url, setUrl] = useState(initialUrl ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewDay[] | null>(null)
-  const [keepExisting, setKeepExisting] = useState(true)
+  const [filterMode, setFilterMode] = useState<FilterMode>('alle')
   const [saving, setSaving] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -64,115 +122,113 @@ export default function CalendarImport({
   }
 
   const buildPreview = (icsText: string) => {
-    const busyDates = new Set(parseICS(icsText))
+    const events = parseICSEvents(icsText)
+    const eventsByDate = new Map(events.map(e => [e.date, e]))
     const weekStart = parseISO(startDate)
     const today = parseISO(todayStr)
-    const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i))
-      .filter(d => d >= today)
-
+    const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i)).filter(d => d >= today)
+    const appIsEmpty = existingAvailability.length === 0
     const result: PreviewDay[] = []
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd')
-      const label = format(day, 'EE, d. MMM', { locale: de })
+      const icsEvent = eventsByDate.get(dateStr) ?? null
       const hadEntry = existingAvailability.some(a => a.date === dateStr)
-      const isBusy = busyDates.has(dateStr)
+      if (!icsEvent && hadEntry) continue  // ICS free + already has entry → nothing to do
 
-      if (!isBusy && !hadEntry) {
-        // Free day → would add as available
-        result.push({ date: dateStr, label, action: 'add', hadEntry, included: true })
-      } else if (!isBusy && hadEntry) {
-        // Free day, already has entry → keep (no change)
-        result.push({ date: dateStr, label, action: 'keep', hadEntry, included: false })
-      } else if (isBusy && hadEntry) {
-        // Busy day, had entry → would remove
-        result.push({ date: dateStr, label, action: 'remove', hadEntry, included: true })
+      const defTimes = defaultTimes ? getTimesForDate(day, defaultTimes) : null
+      let overlapType: OverlapType = 'none'
+      let adjustedStart: string | null = null, adjustedEnd: string | null = null
+
+      if (icsEvent && defTimes) {
+        const ol = detectOverlap(icsEvent, defTimes.start, defTimes.end)
+        overlapType = ol.type; adjustedStart = ol.adjustedStart; adjustedEnd = ol.adjustedEnd
+      } else if (icsEvent) {
+        overlapType = icsEvent.allDay ? 'full' : 'none'
       }
-      // isBusy && !hadEntry → nothing to do, skip
+
+      result.push({
+        date: dateStr,
+        label: format(day, 'EE, d. MMM', { locale: de }),
+        icsEvent, overlapType, adjustedStart, adjustedEnd,
+        state: initialState(icsEvent, overlapType),
+        selected: false, hadEntry,
+      })
     }
 
-    setPreview(result)
+    const mode: FilterMode = appIsEmpty ? 'alles' : 'alle'
+    setPreview(applyFilter(result, mode))
+    setFilterMode(mode)
   }
 
   const handleFile = async (file: File) => {
-    setError(null)
-    setLoading(true)
+    setError(null); setLoading(true)
     try {
       const text = await file.text()
-      if (!text.includes('BEGIN:VCALENDAR')) {
-        setError('Die Datei scheint keine gültige ICS/iCal-Datei zu sein.')
-        return
-      }
+      if (!text.includes('BEGIN:VCALENDAR')) { setError('Keine gültige ICS-Datei.'); return }
       buildPreview(text)
-    } catch {
-      setError('Datei konnte nicht gelesen werden.')
-    } finally {
-      setLoading(false)
-    }
+    } catch { setError('Datei konnte nicht gelesen werden.') }
+    finally { setLoading(false) }
   }
 
   const handleUrl = async () => {
-    setError(null)
-    setLoading(true)
+    setError(null); setLoading(true)
     try {
       const res = await fetch('/api/calendar/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       })
-      if (!res.ok) {
-        const msg = await res.text()
-        setError(`Fehler: ${msg}`)
-        return
-      }
-      const text = await res.text()
-      buildPreview(text)
-    } catch {
-      setError('URL konnte nicht abgerufen werden.')
-    } finally {
-      setLoading(false)
-    }
+      if (!res.ok) { setError(`Fehler: ${await res.text()}`); return }
+      buildPreview(await res.text())
+    } catch { setError('URL konnte nicht abgerufen werden.') }
+    finally { setLoading(false) }
   }
 
-  const toggleDay = (date: string) => {
-    setPreview(prev => prev?.map(d =>
-      d.date === date ? { ...d, included: !d.included } : d
-    ) ?? null)
+  const handleFilterMode = (mode: FilterMode) => {
+    setFilterMode(mode)
+    setPreview(prev => prev ? applyFilter(prev, mode) : null)
   }
 
-  // When keepExisting changes, recalculate 'remove' inclusions
-  const handleKeepExisting = (val: boolean) => {
-    setKeepExisting(val)
+  const cycleDay = (date: string) =>
     setPreview(prev => prev?.map(d =>
-      d.action === 'remove' ? { ...d, included: !val } : d
+      d.date === date ? { ...d, state: cycleState(d.state, d.overlapType) } : d
     ) ?? null)
-  }
+
+  const toggleSelected = (date: string) =>
+    setPreview(prev => prev?.map(d =>
+      d.date === date ? { ...d, selected: !d.selected } : d
+    ) ?? null)
 
   const handleConfirm = async () => {
     if (!preview) return
     setSaving(true)
+    const toSave: DayAvailability[] = []
+    const toDelete: string[] = []
 
-    const toSave: DayAvailability[] = preview
-      .filter(d => d.included && d.action === 'add')
-      .map(d => ({
-        date: d.date,
-        status: 'available' as const,
-        from_time: defaultFromTime ?? null,
-        until_time: defaultUntilTime ?? null,
-      }))
-
-    const toDelete: string[] = preview
-      .filter(d => d.included && d.action === 'remove')
-      .map(d => d.date)
+    for (const day of preview) {
+      if (!day.selected) continue
+      const date = parseISO(day.date)
+      const dt = defaultTimes ? getTimesForDate(date, defaultTimes) : null
+      if (day.state === 'green') {
+        toSave.push({ date: day.date, status: 'available', from_time: dt?.start ?? null, until_time: dt?.end ?? null })
+      } else if (day.state === 'yellow') {
+        toSave.push({ date: day.date, status: 'uncertain', from_time: dt?.start ?? null, until_time: dt?.end ?? null })
+      } else if (day.state === 'dark_green') {
+        toSave.push({ date: day.date, status: 'available', from_time: day.adjustedStart ?? dt?.start ?? null, until_time: day.adjustedEnd ?? dt?.end ?? null })
+      } else if (day.state === 'orange') {
+        toSave.push({ date: day.date, status: 'uncertain', from_time: day.adjustedStart ?? dt?.start ?? null, until_time: day.adjustedEnd ?? dt?.end ?? null })
+      } else if ((day.state === 'red' || day.state === 'violet') && day.hadEntry) {
+        toDelete.push(day.date)
+      }
+    }
 
     await onImport(toSave, toDelete)
-    setSaving(false)
-    onOpenChange(false)
-    reset()
+    setSaving(false); onOpenChange(false); reset()
   }
 
-  const addCount = preview?.filter(d => d.action === 'add' && d.included).length ?? 0
-  const removeCount = preview?.filter(d => d.action === 'remove' && d.included).length ?? 0
+  const selected = preview?.filter(d => d.selected) ?? []
+  const addCount    = selected.filter(d => ['green', 'yellow', 'dark_green', 'orange'].includes(d.state)).length
+  const removeCount = selected.filter(d => ['red', 'violet'].includes(d.state) && d.hadEntry).length
 
   return (
     <Sheet open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset() }}>
@@ -230,20 +286,12 @@ export default function CalendarImport({
                 <p className="text-sm text-muted-foreground">
                   Gib eine ICS- oder webcal-URL ein. Diese findest du in deiner Kalender-App unter „Kalender teilen" oder „Abonnement-Link".
                 </p>
-                <div className="space-y-1">
-                  <Label htmlFor="cal-url">Kalender-URL</Label>
-                  <Input
-                    id="cal-url"
-                    placeholder="https://… oder webcal://…"
-                    value={url}
-                    onChange={e => setUrl(e.target.value)}
-                  />
-                </div>
-                <Button
-                  className="w-full"
-                  onClick={handleUrl}
-                  disabled={loading || !url.trim()}
-                >
+                <Input
+                  placeholder="https://… oder webcal://…"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                />
+                <Button className="w-full" onClick={handleUrl} disabled={loading || !url.trim()}>
                   {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Wird geladen…</> : 'Kalender laden'}
                 </Button>
               </div>
@@ -258,65 +306,70 @@ export default function CalendarImport({
           </div>
         ) : (
           <div className="mt-4 space-y-4">
-            {/* Summary */}
-            <div className="rounded-lg bg-muted px-4 py-3 text-sm space-y-1">
-              <p><span className="text-green-600 font-medium">+{addCount} Tage</span> werden als verfügbar eingetragen</p>
-              {removeCount > 0 && (
-                <p><span className="text-red-500 font-medium">−{removeCount} Tage</span> werden entfernt (im Kalender belegt)</p>
-              )}
-              {addCount === 0 && removeCount === 0 && (
-                <p className="text-muted-foreground">Keine Änderungen – dein Kalender ist bereits aktuell.</p>
-              )}
+            {/* Filter buttons */}
+            <div className="flex gap-2">
+              {(['alle', 'alles', 'nichts'] as FilterMode[]).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => handleFilterMode(mode)}
+                  className={cn(
+                    'flex-1 rounded-lg border py-1.5 text-xs font-medium transition-colors',
+                    filterMode === mode ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  {mode === 'alle' ? 'Alle Termine' : mode === 'alles' ? 'Alles übernehmen' : 'Nichts'}
+                </button>
+              ))}
             </div>
 
-            {/* Options */}
-            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={keepExisting}
-                onChange={e => handleKeepExisting(e.target.checked)}
-                className="rounded"
-              />
-              Bestehende Einträge behalten (belegte Tage nicht löschen)
-            </label>
+            {/* Summary */}
+            <div className="rounded-lg bg-muted px-4 py-3 text-sm space-y-1">
+              {addCount > 0 && <p><span className="font-medium text-green-700">+{addCount} Tage</span> werden eingetragen</p>}
+              {removeCount > 0 && <p><span className="font-medium text-red-600">−{removeCount} Tage</span> werden entfernt</p>}
+              {addCount === 0 && removeCount === 0 && <p className="text-muted-foreground">Keine Änderungen ausgewählt.</p>}
+            </div>
 
             {/* Day list */}
-            {preview.filter(d => d.action !== 'keep').length > 0 && (
-              <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-                {preview
-                  .filter(d => d.action !== 'keep')
-                  .map(d => (
+            {preview.length > 0 ? (
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {preview.map(d => (
+                  <div key={d.date} className={cn(
+                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
+                    d.selected ? 'bg-background border-border' : 'bg-muted/40 border-border/50 opacity-60'
+                  )}>
+                    <input
+                      type="checkbox"
+                      checked={d.selected}
+                      onChange={() => toggleSelected(d.date)}
+                      className="rounded shrink-0"
+                    />
+                    <span className="flex-1 text-foreground">{d.label}</span>
                     <button
-                      key={d.date}
-                      onClick={() => toggleDay(d.date)}
-                      className={cn(
-                        'w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm border transition-colors',
-                        d.included
-                          ? d.action === 'add'
-                            ? 'bg-green-50 border-green-200 text-green-800'
-                            : 'bg-red-50 border-red-200 text-red-700'
-                          : 'bg-muted/50 border-border text-muted-foreground line-through'
-                      )}
-                    >
-                      <span>{d.label}</span>
-                      <span className="text-xs font-medium">
-                        {d.included
-                          ? d.action === 'add' ? '+ verfügbar' : '− entfernen'
-                          : 'übersprungen'}
-                      </span>
-                    </button>
-                  ))}
+                      onClick={() => cycleDay(d.date)}
+                      title={STATE_STYLE[d.state].label}
+                      className={cn('w-5 h-5 rounded-full shrink-0 transition-colors', STATE_STYLE[d.state].dot)}
+                    />
+                  </div>
+                ))}
               </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">Keine relevanten Tage gefunden.</p>
             )}
 
-            <p className="text-xs text-muted-foreground">
-              Tippe auf einen Eintrag, um ihn ein-/auszuschließen.
-            </p>
+            {/* Legend */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              {(Object.entries(STATE_STYLE) as [DayState, { dot: string; label: string }][]).map(([, s]) => (
+                <div key={s.label} className="flex items-center gap-1.5">
+                  <span className={cn('w-3 h-3 rounded-full shrink-0', s.dot)} />
+                  {s.label}
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground">Tippe auf den Farbkreis, um den Status zu wechseln.</p>
 
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" className="flex-1" onClick={reset}>
-                Zurück
-              </Button>
+              <Button variant="outline" className="flex-1" onClick={reset}>Zurück</Button>
               <Button
                 className="flex-1"
                 onClick={handleConfirm}
@@ -334,3 +387,4 @@ export default function CalendarImport({
     </Sheet>
   )
 }
+
