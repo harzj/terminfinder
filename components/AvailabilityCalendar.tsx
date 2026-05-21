@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Lock } from 'lucide-react'
-import { getDayType, DefaultTimes } from '@/lib/holidays'
+import { getTimesForDate, DefaultTimes } from '@/lib/holidays'
 
 export type AvailabilityStatus = 'available' | 'uncertain' | null
 
@@ -111,12 +111,9 @@ export default function AvailabilityCalendar({
         let fromDefault: string | null = null
         let untilDefault: string | null = null
         if (defaultTimes) {
-          const dayType = getDayType(date)
-          const times = defaultTimes[dayType]
-          if (times) {
-            fromDefault = times.start
-            untilDefault = times.end
-          }
+          const times = getTimesForDate(date, defaultTimes)
+          fromDefault = times.start
+          untilDefault = times.end
         }
         await onSave({ date: dateStr, status: 'available', from_time: fromDefault, until_time: untilDefault })
       } else if (avail.status === 'available') {

@@ -41,11 +41,12 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [syncedCount, setSyncedCount] = useState<number | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
 
-  // Default availability times
-  type TimesState = { start: string; end: string }
-  const [workday, setWorkday] = useState<TimesState>(defaultTimes?.workday ?? { start: '18:00', end: '22:00' })
-  const [preFree, setPreFree] = useState<TimesState>(defaultTimes?.pre_free ?? { start: '18:00', end: '23:30' })
-  const [freeDay, setFreeDay] = useState<TimesState>(defaultTimes?.free_day ?? { start: '10:00', end: '22:00' })
+  // Default availability times (4 fields)
+  const isNewFmt = defaultTimes && 'start_frei' in defaultTimes
+  const [startFrei, setStartFrei] = useState(isNewFmt ? defaultTimes!.start_frei : '10:00')
+  const [startWerktag, setStartWerktag] = useState(isNewFmt ? defaultTimes!.start_werktag : '18:00')
+  const [endeNextWorkday, setEndeNextWorkday] = useState(isNewFmt ? defaultTimes!.ende_next_workday : '22:00')
+  const [endeNextFree, setEndeNextFree] = useState(isNewFmt ? defaultTimes!.ende_next_free : '23:30')
   const [timesEnabled, setTimesEnabled] = useState(defaultTimes !== null)
   const [savingTimes, setSavingTimes] = useState(false)
   const [timesSaved, setTimesSaved] = useState(false)
@@ -104,7 +105,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       .from('profiles')
       .update({
         default_availability_times: timesEnabled
-          ? { workday, pre_free: preFree, free_day: freeDay }
+          ? { start_frei: startFrei, start_werktag: startWerktag, ende_next_workday: endeNextWorkday, ende_next_free: endeNextFree }
           : null,
       })
       .eq('id', profile.id)
@@ -310,37 +311,24 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
             <Label htmlFor="timesEnabled" className="cursor-pointer">Standard-Uhrzeiten aktivieren</Label>
           </div>
           {timesEnabled && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {([
-                { label: 'Werktag', sub: 'Mo–Do', key: 'workday', val: workday, set: setWorkday },
-                { label: 'Freitagsgefühl', sub: 'Fr + Tag vor Feiertag', key: 'pre_free', val: preFree, set: setPreFree },
-                { label: 'Freier Tag', sub: 'Sa, So, Feiertage', key: 'free_day', val: freeDay, set: setFreeDay },
+                { label: 'Start, wenn frei', sub: 'Sa, So, Feiertage', val: startFrei, set: setStartFrei },
+                { label: 'Start an Werktag', sub: 'Mo–Fr', val: startWerktag, set: setStartWerktag },
+                { label: 'Ende, wenn nächster Tag Werktag', sub: 'Mo–Do, So', val: endeNextWorkday, set: setEndeNextWorkday },
+                { label: 'Ende, wenn nächster Tag frei', sub: 'Fr, Sa, Tag vor Feiertag', val: endeNextFree, set: setEndeNextFree },
               ] as const).map(({ label, sub, val, set }) => (
-                <div key={label} className="space-y-1.5">
-                  <div>
-                    <span className="text-sm font-medium">{label}</span>
-                    <span className="text-xs text-muted-foreground ml-2">{sub}</span>
+                <div key={label} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-tight">{label}</p>
+                    <p className="text-xs text-muted-foreground">{sub}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 space-y-0.5">
-                      <Label className="text-xs text-muted-foreground">Von</Label>
-                      <input
-                        type="time"
-                        value={val.start}
-                        onChange={(e) => set((prev) => ({ ...prev, start: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                      />
-                    </div>
-                    <div className="flex-1 space-y-0.5">
-                      <Label className="text-xs text-muted-foreground">Bis</Label>
-                      <input
-                        type="time"
-                        value={val.end}
-                        onChange={(e) => set((prev) => ({ ...prev, end: e.target.value }))}
-                        className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                      />
-                    </div>
-                  </div>
+                  <input
+                    type="time"
+                    value={val}
+                    onChange={(e) => set(e.target.value)}
+                    className="w-28 rounded-md border border-input bg-background px-3 py-1.5 text-sm shrink-0"
+                  />
                 </div>
               ))}
             </div>
@@ -457,6 +445,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         })()}
         todayStr={new Date().toISOString().split('T')[0]}
         existingAvailability={[]}
+        initialUrl={importUrl.trim() || null}
         defaultFromTime={null}
         defaultUntilTime={null}
         onImport={handleProfileImport}

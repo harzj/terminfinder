@@ -36,38 +36,37 @@ export function getGermanHolidays(year: number): Set<string> {
   ])
 }
 
-export type DayType = 'workday' | 'pre_free' | 'free_day'
-
-/**
- * Classify a date into a day type for default availability times.
- *
- * - free_day:  Saturday, Sunday, or public holiday
- * - pre_free:  Day whose next day is a free_day (typically Friday or day before holiday)
- * - workday:   Everything else (Mon–Thu, not before a holiday)
- */
-export function getDayType(date: Date): DayType {
+/** Returns true if the date is a Saturday, Sunday, or public holiday */
+export function isFreiDay(date: Date): boolean {
   const year = date.getFullYear()
-  // Cover year boundaries
   const holidays = new Set([
     ...getGermanHolidays(year),
     ...getGermanHolidays(year + 1),
   ])
-
-  const dateStr = format(date, 'yyyy-MM-dd')
-  const dow = date.getDay() // 0=Sun, 6=Sat
-
-  if (dow === 0 || dow === 6 || holidays.has(dateStr)) return 'free_day'
-
-  const tomorrow = addDays(date, 1)
-  const tomorrowStr = format(tomorrow, 'yyyy-MM-dd')
-  const tomorrowDow = tomorrow.getDay()
-  if (tomorrowDow === 0 || tomorrowDow === 6 || holidays.has(tomorrowStr)) return 'pre_free'
-
-  return 'workday'
+  const dow = date.getDay()
+  return dow === 0 || dow === 6 || holidays.has(format(date, 'yyyy-MM-dd'))
 }
 
+/**
+ * 4-field availability defaults:
+ * - start_frei:          Start-Zeit für freie Tage (Sa, So, Feiertage)
+ * - start_werktag:       Start-Zeit für Werktage (Mo–Fr)
+ * - ende_next_workday:   Ende-Zeit wenn nächster Tag ein Werktag ist (Mo–Do, So)
+ * - ende_next_free:      Ende-Zeit wenn nächster Tag frei ist (Fr, Sa, Tag vor Feiertag)
+ */
 export interface DefaultTimes {
-  workday?: { start: string; end: string }
-  pre_free?: { start: string; end: string }
-  free_day?: { start: string; end: string }
+  start_frei: string
+  start_werktag: string
+  ende_next_workday: string
+  ende_next_free: string
+}
+
+/** Derive start/end times for a given date from the 4-field DefaultTimes */
+export function getTimesForDate(date: Date, times: DefaultTimes): { start: string; end: string } {
+  const frei = isFreiDay(date)
+  const nextFrei = isFreiDay(addDays(date, 1))
+  return {
+    start: frei ? times.start_frei : times.start_werktag,
+    end: nextFrei ? times.ende_next_free : times.ende_next_workday,
+  }
 }

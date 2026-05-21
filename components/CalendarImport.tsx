@@ -18,6 +18,7 @@ interface Props {
   startDate: string          // Montag der aktuellen Woche (yyyy-MM-dd)
   todayStr: string
   existingAvailability: DayAvailability[]
+  initialUrl?: string | null
   defaultFromTime?: string | null
   defaultUntilTime?: string | null
   onImport: (days: DayAvailability[], toDelete: string[]) => Promise<void>
@@ -39,12 +40,13 @@ export default function CalendarImport({
   startDate,
   todayStr,
   existingAvailability,
+  initialUrl,
   defaultFromTime,
   defaultUntilTime,
   onImport,
 }: Props) {
-  const [tab, setTab] = useState<Tab>('file')
-  const [url, setUrl] = useState('')
+  const [tab, setTab] = useState<Tab>(() => initialUrl ? 'url' : 'file')
+  const [url, setUrl] = useState(initialUrl ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewDay[] | null>(null)
@@ -57,7 +59,8 @@ export default function CalendarImport({
     setError(null)
     setLoading(false)
     setSaving(false)
-    setUrl('')
+    setUrl(initialUrl ?? '')
+    setTab(initialUrl ? 'url' : 'file')
   }
 
   const buildPreview = (icsText: string) => {
