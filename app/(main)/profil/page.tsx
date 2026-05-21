@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import ProfilClient from './ProfilClient'
 import { DefaultTimes } from '@/lib/holidays'
+import { DayAvailability } from '@/components/AvailabilityCalendar'
 
 export default async function ProfilPage() {
   const supabase = await createClient()
@@ -34,6 +35,25 @@ export default async function ProfilPage() {
     group_name: groupMap.get(m.group_id) ?? 'Unbekannte Gruppe',
   }))
 
+  // Date range for CalendarImport (use local date parts to avoid UTC shift)
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const dow = now.getDay()
+  const diff = dow === 0 ? -6 : 1 - dow
+  const mon = new Date(now)
+  mon.setDate(now.getDate() + diff)
+  const weekStartStr = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`
+  const weekEnd = new Date(mon)
+  weekEnd.setDate(mon.getDate() + 34)
+  const weekEndStr = `${weekEnd.getFullYear()}-${String(weekEnd.getMonth() + 1).padStart(2, '0')}-${String(weekEnd.getDate()).padStart(2, '0')}`
+
+  const { data: availabilityData } = await supabase
+    .from('availability')
+    .select('date, status, from_time, until_time')
+    .eq('user_id', user.id)
+    .gte('date', weekStartStr)
+    .lte('date', weekEndStr)
+
   return (
     <ProfilClient
       profile={profile ?? { id: user.id, display_name: '', bgg_username: null, bgg_collection: null, default_availability_times: null, calendar_token: '', calendar_import_url: null }}
@@ -43,6 +63,9 @@ export default async function ProfilPage() {
       defaultTimes={(profile?.default_availability_times as DefaultTimes | null) ?? null}
       calendarToken={profile?.calendar_token ?? ''}
       calendarImportUrl={profile?.calendar_import_url ?? null}
+      startDate={weekStartStr}
+      todayStr={todayStr}
+      initialAvailability={(availabilityData ?? []) as DayAvailability[]}
     />
   )
 }

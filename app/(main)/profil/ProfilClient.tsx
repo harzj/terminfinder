@@ -27,9 +27,12 @@ interface Props {
   defaultTimes: DefaultTimes | null
   calendarToken: string
   calendarImportUrl: string | null
+  startDate: string
+  todayStr: string
+  initialAvailability: DayAvailability[]
 }
 
-export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl }: Props) {
+export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl, startDate, todayStr, initialAvailability }: Props) {
   const router = useRouter()
 
   const [displayName, setDisplayName] = useState(profile.display_name)
@@ -435,16 +438,9 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       <CalendarImport
         open={importOpen}
         onOpenChange={setImportOpen}
-        startDate={(() => {
-          const today = new Date()
-          const dow = today.getDay()
-          const diff = dow === 0 ? -6 : 1 - dow
-          const mon = new Date(today)
-          mon.setDate(today.getDate() + diff)
-          return mon.toISOString().split('T')[0]
-        })()}
-        todayStr={new Date().toISOString().split('T')[0]}
-        existingAvailability={[]}
+        startDate={startDate}
+        todayStr={todayStr}
+        existingAvailability={initialAvailability}
         initialUrl={importUrl.trim() || null}
         defaultTimes={timesEnabled ? { start_frei: startFrei, start_werktag: startWerktag, ende_next_workday: endeNextWorkday, ende_next_free: endeNextFree } : null}
         onImport={handleProfileImport}
