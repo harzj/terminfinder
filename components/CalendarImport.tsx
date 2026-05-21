@@ -24,7 +24,7 @@ interface Props {
 }
 
 type Tab = 'file' | 'url'
-type DayState = 'green' | 'yellow' | 'red' | 'violet' | 'dark_green' | 'orange'
+type DayState = 'green' | 'yellow' | 'red' | 'violet' | 'dark_green' | 'orange' | 'skip'
 type FilterMode = 'alle' | 'alles' | 'nichts'
 type OverlapType = 'none' | 'front' | 'back' | 'full'
 
@@ -33,20 +33,32 @@ interface PreviewDay {
   label: string
   icsEvent: BusyEvent | null
   overlapType: OverlapType
-  adjustedStart: string | null  // for 'front' overlap
-  adjustedEnd: string | null    // for 'back' overlap
-  state: DayState
-  selected: boolean
+  adjustedStart: string | null
+  adjustedEnd: string | null
+  baseState: DayState   // natural state from ICS
+  state: DayState       // current state after filter + user cycles
   hadEntry: boolean
 }
 
-const STATE_STYLE: Record<DayState, { dot: string; label: string }> = {
-  green:      { dot: 'bg-green-500',  label: 'verfügbar' },
-  yellow:     { dot: 'bg-yellow-400', label: 'unklar' },
-  red:        { dot: 'bg-red-500',    label: 'nicht verfügbar' },
-  violet:     { dot: 'bg-purple-500', label: 'Termin (nicht verfügbar)' },
-  dark_green: { dot: 'bg-green-800',  label: 'verfügbar (nach Termin)' },
-  orange:     { dot: 'bg-orange-500', label: 'unklar (nach Termin)' },
+// Colored-oval border + bg + text
+const STATE_STYLE: Record<DayState, string> = {
+  green:      'border-green-500 bg-green-50 text-green-800',
+  yellow:     'border-yellow-400 bg-yellow-50 text-yellow-800',
+  red:        'border-red-500 bg-red-50 text-red-700',
+  violet:     'border-purple-500 bg-purple-50 text-purple-800',
+  dark_green: 'border-green-700 bg-green-100 text-green-900',
+  orange:     'border-orange-500 bg-orange-50 text-orange-800',
+  skip:       'border-muted-foreground/30 bg-muted/30 text-muted-foreground',
+}
+
+const STATE_LABEL: Record<DayState, string> = {
+  green:      'verfügbar',
+  yellow:     'unklar',
+  red:        'nicht verfügbar',
+  violet:     'Termin – entfernen',
+  dark_green: 'verfügbar (nach Termin)',
+  orange:     'unklar (nach Termin)',
+  skip:       'überspringen',
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -81,21 +93,33 @@ function initialState(event: BusyEvent | null, overlap: OverlapType): DayState {
   return 'violet'
 }
 
-function cycleState(cur: DayState, overlap: OverlapType): DayState {
-  if (overlap === 'front' || overlap === 'back') {
-    const c: DayState[] = ['violet', 'dark_green', 'orange']
-    return c[(c.indexOf(cur) + 1) % 3]
+function cycleState(cur: DayState, hasIcsEvent: boolean, overlap: OverlapType): DayState {
+  if (!hasIcsEvent) {
+    // ICS-free opportunity: green → yellow → skip → green
+    const c: DayState[] = ['green', 'yellow', 'skip']
+    const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 3]
   }
-  const c: DayState[] = ['green', 'yellow', 'red']
-  return c[(c.indexOf(cur) + 1) % 3]
+  if (overlap === 'front' || overlap === 'back') {
+    const c: DayState[] = ['violet', 'dark_green', 'orange', 'skip']
+    const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 4]
+  }
+  if (overlap === 'full') {
+    // ICS-busy conflict: red → green → yellow → skip → red
+    const c: DayState[] = ['red', 'green', 'yellow', 'skip']
+    const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 4]
+  }
+  // overlap === 'none': timed event, no overlap with window
+  const c: DayState[] = ['yellow', 'red', 'green', 'skip']
+  const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 4]
 }
 
 function applyFilter(days: PreviewDay[], mode: FilterMode): PreviewDay[] {
   return days.map(d => ({
     ...d,
-    selected: mode === 'alles' ? true
-      : mode === 'nichts' ? false
-      : d.icsEvent !== null && d.hadEntry,   // 'alle': only ICS-busy + had app entry
+    state: mode === 'nichts' ? 'skip'
+      : mode === 'alle'
+        ? (d.icsEvent ? d.baseState : 'skip')  // only ICS-busy conflicts
+        : d.baseState,                          // 'alles': all deviations
   }))
 }
 
@@ -127,14 +151,15 @@ export default function CalendarImport({
     const weekStart = parseISO(startDate)
     const today = parseISO(todayStr)
     const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i)).filter(d => d >= today)
-    const appIsEmpty = existingAvailability.length === 0
     const result: PreviewDay[] = []
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd')
       const icsEvent = eventsByDate.get(dateStr) ?? null
       const hadEntry = existingAvailability.some(a => a.date === dateStr)
-      if (!icsEvent && hadEntry) continue  // ICS free + already has entry → nothing to do
+      // Skip matches: ICS free + app has entry (both available), or ICS busy + no entry (both unavailable)
+      if (!icsEvent && hadEntry) continue
+      if (icsEvent && !hadEntry) continue
 
       const defTimes = defaultTimes ? getTimesForDate(day, defaultTimes) : null
       let overlapType: OverlapType = 'none'
@@ -147,16 +172,16 @@ export default function CalendarImport({
         overlapType = icsEvent.allDay ? 'full' : 'none'
       }
 
+      const base = initialState(icsEvent, overlapType)
       result.push({
         date: dateStr,
         label: format(day, 'EE, d. MMM', { locale: de }),
         icsEvent, overlapType, adjustedStart, adjustedEnd,
-        state: initialState(icsEvent, overlapType),
-        selected: false, hadEntry,
+        baseState: base, state: base, hadEntry,
       })
     }
 
-    const mode: FilterMode = appIsEmpty ? 'alles' : 'alle'
+    const mode: FilterMode = 'alle'
     setPreview(applyFilter(result, mode))
     setFilterMode(mode)
   }
@@ -191,12 +216,7 @@ export default function CalendarImport({
 
   const cycleDay = (date: string) =>
     setPreview(prev => prev?.map(d =>
-      d.date === date ? { ...d, state: cycleState(d.state, d.overlapType) } : d
-    ) ?? null)
-
-  const toggleSelected = (date: string) =>
-    setPreview(prev => prev?.map(d =>
-      d.date === date ? { ...d, selected: !d.selected } : d
+      d.date === date ? { ...d, state: cycleState(d.state, d.icsEvent !== null, d.overlapType) } : d
     ) ?? null)
 
   const handleConfirm = async () => {
@@ -206,7 +226,7 @@ export default function CalendarImport({
     const toDelete: string[] = []
 
     for (const day of preview) {
-      if (!day.selected) continue
+      if (day.state === 'skip') continue
       const date = parseISO(day.date)
       const dt = defaultTimes ? getTimesForDate(date, defaultTimes) : null
       if (day.state === 'green') {
@@ -226,9 +246,8 @@ export default function CalendarImport({
     setSaving(false); onOpenChange(false); reset()
   }
 
-  const selected = preview?.filter(d => d.selected) ?? []
-  const addCount    = selected.filter(d => ['green', 'yellow', 'dark_green', 'orange'].includes(d.state)).length
-  const removeCount = selected.filter(d => ['red', 'violet'].includes(d.state) && d.hadEntry).length
+  const addCount    = (preview ?? []).filter(d => ['green', 'yellow', 'dark_green', 'orange'].includes(d.state)).length
+  const removeCount = (preview ?? []).filter(d => ['red', 'violet'].includes(d.state) && d.hadEntry).length
 
   return (
     <Sheet open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset() }}>
@@ -331,42 +350,26 @@ export default function CalendarImport({
 
             {/* Day list */}
             {preview.length > 0 ? (
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {preview.map(d => (
-                  <div key={d.date} className={cn(
-                    'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
-                    d.selected ? 'bg-background border-border' : 'bg-muted/40 border-border/50 opacity-60'
-                  )}>
-                    <input
-                      type="checkbox"
-                      checked={d.selected}
-                      onChange={() => toggleSelected(d.date)}
-                      className="rounded shrink-0"
-                    />
-                    <span className="flex-1 text-foreground">{d.label}</span>
-                    <button
-                      onClick={() => cycleDay(d.date)}
-                      title={STATE_STYLE[d.state].label}
-                      className={cn('w-5 h-5 rounded-full shrink-0 transition-colors', STATE_STYLE[d.state].dot)}
-                    />
-                  </div>
+                  <button
+                    key={d.date}
+                    onClick={() => cycleDay(d.date)}
+                    className={cn(
+                      'w-full flex items-center justify-between rounded-full border-2 px-4 py-2 text-sm font-medium transition-colors',
+                      STATE_STYLE[d.state]
+                    )}
+                  >
+                    <span>{d.label}</span>
+                    <span className="text-xs opacity-70">{STATE_LABEL[d.state]}</span>
+                  </button>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">Keine relevanten Tage gefunden.</p>
+              <p className="text-sm text-muted-foreground">Keine Abweichungen gefunden – alles stimmt überein.</p>
             )}
 
-            {/* Legend */}
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              {(Object.entries(STATE_STYLE) as [DayState, { dot: string; label: string }][]).map(([, s]) => (
-                <div key={s.label} className="flex items-center gap-1.5">
-                  <span className={cn('w-3 h-3 rounded-full shrink-0', s.dot)} />
-                  {s.label}
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs text-muted-foreground">Tippe auf den Farbkreis, um den Status zu wechseln.</p>
+            <p className="text-xs text-muted-foreground">Tippe auf einen Eintrag, um den Status zu wechseln.</p>
 
             <div className="flex gap-2 pt-1">
               <Button variant="outline" className="flex-1" onClick={reset}>Zurück</Button>
