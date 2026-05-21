@@ -100,12 +100,13 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     const supabase = createClient()
 
     // Fetch current response to track changes away from 'accepted'
-    const { data: current } = await supabase
+    const { data: currentRaw } = await supabase
       .from('event_responses')
       .select('response, previous_response')
       .eq('event_id', eventId)
       .eq('user_id', currentUserId)
       .maybeSingle()
+    const current = currentRaw as any
 
     const currentResponse = current?.response ?? null
     let newPreviousResponse: string | null
