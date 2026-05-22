@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { generateICS, ICSEvent } from '@/lib/ics'
+import type { Database } from '@/lib/supabase/database.types'
 
 export async function GET(
   _req: Request,
@@ -13,7 +15,19 @@ export async function GET(
     return new Response('Not found', { status: 404 })
   }
 
-  const supabase = await createClient()
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabase = serviceRoleKey
+    ? createSupabaseClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey,
+        {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        }
+      )
+    : await createClient()
 
   // Look up user by token
   const { data: profile } = await supabase
