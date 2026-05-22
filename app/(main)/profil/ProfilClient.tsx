@@ -7,10 +7,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus } from 'lucide-react'
 import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
+
+function parseImportUrls(raw: string | null): string[] {
+  const items = (raw ?? '')
+    .split(/\r?\n/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+  return items.length > 0 ? items : ['']
+}
+
+function serializeImportUrls(urls: string[]): string | null {
+  const cleaned = urls.map((u) => u.trim()).filter(Boolean)
+  return cleaned.length > 0 ? cleaned.join('\n') : null
+}
 
 interface Membership {
   id: string
@@ -61,7 +74,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [savedGroup, setSavedGroup] = useState<string | null>(null)
 
   // Calendar integration
-  const [importUrl, setImportUrl] = useState(initialImportUrl ?? '')
+  const [importUrls, setImportUrls] = useState<string[]>(() => parseImportUrls(initialImportUrl))
   const [savingImportUrl, setSavingImportUrl] = useState(false)
   const [importUrlSaved, setImportUrlSaved] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -151,10 +164,31 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const handleSaveImportUrl = async () => {
     setSavingImportUrl(true)
     const supabase = createClient()
-    await supabase.from('profiles').update({ calendar_import_url: importUrl.trim() || null }).eq('id', profile.id)
+    await supabase
+      .from('profiles')
+      .update({ calendar_import_url: serializeImportUrls(importUrls) })
+      .eq('id', profile.id)
     setSavingImportUrl(false)
     setImportUrlSaved(true)
     setTimeout(() => setImportUrlSaved(false), 2000)
+  }
+
+  const updateImportUrl = (index: number, value: string) => {
+    setImportUrlSaved(false)
+    setImportUrls((prev) => prev.map((url, i) => (i === index ? value : url)))
+  }
+
+  const addImportUrl = () => {
+    setImportUrlSaved(false)
+    setImportUrls((prev) => [...prev, ''])
+  }
+
+  const removeImportUrl = (index: number) => {
+    setImportUrlSaved(false)
+    setImportUrls((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      return next.length > 0 ? next : ['']
+    })
   }
 
   const handleProfileImport = async (days: DayAvailability[], toDelete: string[]) => {
@@ -390,16 +424,41 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
             <p className="text-xs text-muted-foreground">
               Speichere eine ICS-URL deines Kalenders, um Verfügbarkeiten per Knopfdruck neu zu importieren.
             </p>
-            <div className="space-y-1">
-              <Label htmlFor="importUrl" className="text-xs">ICS-/webcal-URL (optional)</Label>
-              <Input
-                id="importUrl"
-                placeholder="https://… oder webcal://…"
-                value={importUrl}
-                onChange={e => setImportUrl(e.target.value)}
-                autoCapitalize="none"
-                autoCorrect="off"
-              />
+            <div className="space-y-2">
+              <Label className="text-xs">ICS-/webcal-URLs (optional)</Label>
+              {importUrls.map((urlValue, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    id={`importUrl-${index}`}
+                    placeholder="https://… oder webcal://…"
+                    value={urlValue}
+                    onChange={e => updateImportUrl(index, e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={() => removeImportUrl(index)}
+                    disabled={importUrls.length === 1}
+                    aria-label={`URL ${index + 1} entfernen`}
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={addImportUrl}
+                aria-label="Weitere URL hinzufügen"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
             </div>
             <div className="flex gap-2">
               <Button
@@ -419,7 +478,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
               <Button
                 size="sm"
                 className="flex-1"
-                disabled={!importUrl.trim()}
+                disabled={!importUrls.some((u) => u.trim())}
                 onClick={() => setImportOpen(true)}
               >
                 <CalendarDays className="h-4 w-4 mr-2" /> Jetzt importieren
@@ -441,7 +500,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         startDate={startDate}
         todayStr={todayStr}
         existingAvailability={initialAvailability}
-        initialUrl={importUrl.trim() || null}
+        initialUrl={importUrls.find((u) => u.trim())?.trim() ?? null}
         defaultTimes={timesEnabled ? { start_frei: startFrei, start_werktag: startWerktag, ende_next_workday: endeNextWorkday, ende_next_free: endeNextFree } : null}
         onImport={handleProfileImport}
       />
