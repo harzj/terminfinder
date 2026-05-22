@@ -36,6 +36,11 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Öffentlicher Kalender-Abo-Link (für externe Clients wie Google/Apple)
+  if (pathname.startsWith('/api/calendar/')) {
+    return supabaseResponse
+  }
+
   // Öffentliche Routen – eingeloggte Nutzer zur Startseite weiterleiten
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
     if (user) {
