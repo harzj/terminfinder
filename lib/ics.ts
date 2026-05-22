@@ -20,6 +20,25 @@ export interface BusyEvent {
   allDay: boolean
   startTime: string | null  // HH:MM
   endTime: string | null    // HH:MM
+  summary: string
+}
+
+function parseEventLine(line: string): { name: string; value: string } | null {
+  const ci = line.indexOf(':')
+  if (ci === -1) return null
+  const rawName = line.slice(0, ci).trim()
+  const value = line.slice(ci + 1).trim()
+  if (!rawName) return null
+  const name = rawName.split(';')[0].toUpperCase()
+  return { name, value }
+}
+
+function unescapeICSText(value: string): string {
+  return value
+    .replace(/\\n/gi, '\n')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
 }
 
 function parseDTValue(value: string): { date: string; time: string | null } | null {
@@ -63,36 +82,66 @@ export function parseICSEvents(text: string): BusyEvent[] {
   let inEvent = false
   let dtstart: { date: string; time: string | null } | null = null
   let dtend: { date: string; time: string | null } | null = null
+  let summary: string | null = null
+  let transparency: string | null = null
+  let busyStatus: string | null = null
 
   for (const raw of lines) {
     const line = raw.trim()
-    if (line === 'BEGIN:VEVENT') { inEvent = true; dtstart = null; dtend = null; continue }
+    if (line === 'BEGIN:VEVENT') {
+      inEvent = true
+      dtstart = null
+      dtend = null
+      summary = null
+      transparency = null
+      busyStatus = null
+      continue
+    }
     if (line === 'END:VEVENT') {
       inEvent = false
-      if (dtstart) {
+      const isFreeByTransparency = (transparency ?? '').toUpperCase() === 'TRANSPARENT'
+      const isFreeByBusyStatus = (busyStatus ?? '').toUpperCase() === 'FREE'
+      const isFreeEvent = isFreeByTransparency || isFreeByBusyStatus
+      if (dtstart && !isFreeEvent) {
+        const safeSummary = (summary?.trim() || '(ohne Titel)')
         if (dtstart.time === null) {
           // All-day event: DTEND is exclusive end per RFC 5545 → expand to cover every day
           const dates = dtend?.time === null ? expandDateRange(dtstart.date, dtend.date) : [dtstart.date]
-          dates.forEach(date => results.push({ date, allDay: true, startTime: null, endTime: null }))
+          dates.forEach(date => results.push({ date, allDay: true, startTime: null, endTime: null, summary: safeSummary }))
         } else {
           results.push({
             date: dtstart.date,
             allDay: false,
             startTime: dtstart.time,
             endTime: dtend?.time ?? null,
+            summary: safeSummary,
           })
         }
       }
       continue
     }
     if (!inEvent) continue
-    if (line.startsWith('DTSTART')) {
-      const ci = line.indexOf(':')
-      if (ci !== -1) dtstart = parseDTValue(line.slice(ci + 1))
+    const parsed = parseEventLine(line)
+    if (!parsed) continue
+    if (parsed.name === 'DTSTART') {
+      dtstart = parseDTValue(parsed.value)
+      continue
     }
-    if (line.startsWith('DTEND')) {
-      const ci = line.indexOf(':')
-      if (ci !== -1) dtend = parseDTValue(line.slice(ci + 1))
+    if (parsed.name === 'DTEND') {
+      dtend = parseDTValue(parsed.value)
+      continue
+    }
+    if (parsed.name === 'SUMMARY') {
+      summary = unescapeICSText(parsed.value)
+      continue
+    }
+    if (parsed.name === 'TRANSP') {
+      transparency = parsed.value
+      continue
+    }
+    if (parsed.name === 'X-MICROSOFT-CDO-BUSYSTATUS') {
+      busyStatus = parsed.value
+      continue
     }
   }
   return results

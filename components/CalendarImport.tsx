@@ -31,7 +31,7 @@ type OverlapType = 'none' | 'front' | 'back' | 'full'
 interface PreviewDay {
   date: string
   label: string
-  icsEvent: BusyEvent | null
+  icsEvents: BusyEvent[]
   overlapType: OverlapType
   adjustedStart: string | null
   adjustedEnd: string | null
@@ -86,8 +86,46 @@ function detectOverlap(event: BusyEvent, defStart: string, defEnd: string): {
   return                                         { type: 'back',  adjustedStart: null, adjustedEnd: fromMin(evS - 60) }
 }
 
-function initialState(event: BusyEvent | null, overlap: OverlapType): DayState {
-  if (!event) return 'green'
+function aggregateOverlap(events: BusyEvent[], defStart: string, defEnd: string): {
+  type: OverlapType; adjustedStart: string | null; adjustedEnd: string | null
+} {
+  if (events.length === 0) return { type: 'none', adjustedStart: null, adjustedEnd: null }
+
+  const frontCandidates: number[] = []
+  const backCandidates: number[] = []
+  let hasPartial = false
+
+  for (const event of events) {
+    const ol = detectOverlap(event, defStart, defEnd)
+    if (ol.type === 'full') {
+      return { type: 'full', adjustedStart: null, adjustedEnd: null }
+    }
+    if (ol.type === 'front') {
+      hasPartial = true
+      if (ol.adjustedStart) frontCandidates.push(toMin(ol.adjustedStart))
+    }
+    if (ol.type === 'back') {
+      hasPartial = true
+      if (ol.adjustedEnd) backCandidates.push(toMin(ol.adjustedEnd))
+    }
+  }
+
+  const adjustedStart = frontCandidates.length > 0 ? fromMin(Math.max(...frontCandidates)) : null
+  const adjustedEnd = backCandidates.length > 0 ? fromMin(Math.min(...backCandidates)) : null
+
+  if (adjustedStart && adjustedEnd && toMin(adjustedStart) >= toMin(adjustedEnd)) {
+    return { type: 'full', adjustedStart: null, adjustedEnd: null }
+  }
+
+  if (hasPartial) {
+    return { type: 'front', adjustedStart, adjustedEnd }
+  }
+
+  return { type: 'none', adjustedStart: null, adjustedEnd: null }
+}
+
+function initialState(hasBusyEvent: boolean, overlap: OverlapType): DayState {
+  if (!hasBusyEvent) return 'green'
   if (overlap === 'full') return 'red'
   if (overlap === 'none') return 'yellow'
   return 'violet'
@@ -118,7 +156,7 @@ function applyFilter(days: PreviewDay[], mode: FilterMode): PreviewDay[] {
     ...d,
     state: mode === 'nichts' ? 'skip'
       : mode === 'alle'
-        ? (d.icsEvent ? d.baseState : 'skip')  // only ICS-busy conflicts
+        ? (d.icsEvents.length > 0 ? d.baseState : 'skip')  // only ICS-busy conflicts
         : d.baseState,                          // 'alles': all deviations
   }))
 }
@@ -147,7 +185,12 @@ export default function CalendarImport({
 
   const buildPreview = (icsText: string) => {
     const events = parseICSEvents(icsText)
-    const eventsByDate = new Map(events.map(e => [e.date, e]))
+    const eventsByDate = new Map<string, BusyEvent[]>()
+    for (const event of events) {
+      const existing = eventsByDate.get(event.date) ?? []
+      existing.push(event)
+      eventsByDate.set(event.date, existing)
+    }
     const weekStart = parseISO(startDate)
     const today = parseISO(todayStr)
     const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i)).filter(d => d >= today)
@@ -155,28 +198,29 @@ export default function CalendarImport({
 
     for (const day of days) {
       const dateStr = format(day, 'yyyy-MM-dd')
-      const icsEvent = eventsByDate.get(dateStr) ?? null
+      const icsEvents = eventsByDate.get(dateStr) ?? []
+      const hasIcsEvent = icsEvents.length > 0
       const hadEntry = existingAvailability.some(a => a.date === dateStr)
       // Skip matches: ICS free + app has entry (both available), or ICS busy + no entry (both unavailable)
-      if (!icsEvent && hadEntry) continue
-      if (icsEvent && !hadEntry) continue
+      if (!hasIcsEvent && hadEntry) continue
+      if (hasIcsEvent && !hadEntry) continue
 
       const defTimes = defaultTimes ? getTimesForDate(day, defaultTimes) : null
       let overlapType: OverlapType = 'none'
       let adjustedStart: string | null = null, adjustedEnd: string | null = null
 
-      if (icsEvent && defTimes) {
-        const ol = detectOverlap(icsEvent, defTimes.start, defTimes.end)
+      if (hasIcsEvent && defTimes) {
+        const ol = aggregateOverlap(icsEvents, defTimes.start, defTimes.end)
         overlapType = ol.type; adjustedStart = ol.adjustedStart; adjustedEnd = ol.adjustedEnd
-      } else if (icsEvent) {
-        overlapType = icsEvent.allDay ? 'full' : 'none'
+      } else if (hasIcsEvent) {
+        overlapType = icsEvents.some(e => e.allDay) ? 'full' : 'none'
       }
 
-      const base = initialState(icsEvent, overlapType)
+      const base = initialState(hasIcsEvent, overlapType)
       result.push({
         date: dateStr,
         label: format(day, 'EE, d. MMM', { locale: de }),
-        icsEvent, overlapType, adjustedStart, adjustedEnd,
+        icsEvents, overlapType, adjustedStart, adjustedEnd,
         baseState: base, state: base, hadEntry,
       })
     }
@@ -216,7 +260,7 @@ export default function CalendarImport({
 
   const cycleDay = (date: string) =>
     setPreview(prev => prev?.map(d =>
-      d.date === date ? { ...d, state: cycleState(d.state, d.icsEvent !== null, d.overlapType) } : d
+      d.date === date ? { ...d, state: cycleState(d.state, d.icsEvents.length > 0, d.overlapType) } : d
     ) ?? null)
 
   const handleConfirm = async () => {
@@ -356,12 +400,21 @@ export default function CalendarImport({
                     key={d.date}
                     onClick={() => cycleDay(d.date)}
                     className={cn(
-                      'w-full flex items-center justify-between rounded-full border-2 px-4 py-2 text-sm font-medium transition-colors',
+                      'w-full rounded-2xl border-2 px-4 py-2 text-sm font-medium transition-colors',
                       STATE_STYLE[d.state]
                     )}
                   >
-                    <span>{d.label}</span>
-                    <span className="text-xs opacity-70">{STATE_LABEL[d.state]}</span>
+                    <span className="flex items-start justify-between gap-3 text-left">
+                      <span className="min-w-0">
+                        <span className="block">{d.label}</span>
+                        {d.icsEvents.length > 0 && (
+                          <span className="mt-0.5 block text-[11px] leading-tight opacity-80 break-words">
+                            {d.icsEvents.map(e => e.summary).join(' • ')}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs opacity-70 shrink-0">{STATE_LABEL[d.state]}</span>
+                    </span>
                   </button>
                 ))}
               </div>
