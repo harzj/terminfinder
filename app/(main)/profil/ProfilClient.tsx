@@ -154,7 +154,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
 
   const handleCopyWebcal = () => {
     const host = typeof window !== 'undefined' ? window.location.host : ''
-    const webcalUrl = `webcal://${host}/api/calendar/${calendarToken}/events.ics`
+    const webcalUrl = `webcal://${host}/api/calendar/${calendarToken}`
     navigator.clipboard.writeText(webcalUrl).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
