@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-function withApiKey(url: string): string {
-  const key = process.env.BGG_API_KEY
-  if (!key) return url
-  const sep = url.includes('?') ? '&' : '?'
-  return `${url}${sep}api_key=${encodeURIComponent(key)}`
+function getBggToken(): string | null {
+  // Keep BGG_API_KEY as backward-compatible fallback, but prefer the new token name.
+  const token = process.env.BGG_API_TOKEN?.trim() || process.env.BGG_API_KEY?.trim()
+  return token || null
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function decodeEntities(s: string): string {
@@ -29,7 +32,6 @@ function parseSearchXml(xml: string): Array<{ id: number; name: string; year?: n
     const id = parseInt(idMatch[1], 10)
 
     // Find primary name (handles any attribute order)
-    const nameRe = /<name\b([^>]*?)\/?>/ .source + '|' + /<name\b([^>]*?)>/.source
     let primaryName: string | null = null
     const nameBlockRe = /<name\b([^>]*?)\s*\/?>/g
     let nm: RegExpExecArray | null
@@ -155,8 +157,49 @@ async function bggFetch(url: string, signal: AbortSignal, cookies?: string): Pro
     'User-Agent': 'Mozilla/5.0 (compatible; Terminfinder/1.0)',
     'Accept': 'application/xml,text/xml,*/*',
   }
+  const token = getBggToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
   if (cookies) headers['Cookie'] = cookies
   return fetch(url, { signal, headers })
+}
+
+async function bggFetchWithRetry(
+  url: string,
+  signal: AbortSignal,
+  options?: {
+    cookies?: string
+    retries?: number
+    retryDelayMs?: number
+    retryStatuses?: number[]
+    allowAuthRetry?: boolean
+  }
+): Promise<{ response: Response; cookies?: string }> {
+  const retries = options?.retries ?? 0
+  const retryDelayMs = options?.retryDelayMs ?? 5000
+  const retryStatuses = options?.retryStatuses ?? [202, 500, 503]
+  const allowAuthRetry = options?.allowAuthRetry ?? true
+
+  let cookies = options?.cookies
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let response = await bggFetch(url, signal, cookies)
+
+    if ((response.status === 401 || response.status === 403) && allowAuthRetry && !cookies) {
+      const authenticatedCookies = await getBggCookies(signal)
+      if (authenticatedCookies) {
+        cookies = authenticatedCookies
+        response = await bggFetch(url, signal, cookies)
+      }
+    }
+
+    if (!retryStatuses.includes(response.status) || attempt === retries) {
+      return { response, cookies }
+    }
+
+    await wait(retryDelayMs)
+  }
+
+  throw new Error('unreachable')
 }
 
 export async function GET(request: NextRequest) {
@@ -172,21 +215,14 @@ export async function GET(request: NextRequest) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30_000)
     try {
-      const url = withApiKey(`https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`)
+      const url = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`
 
-      // BGG queues collection requests – retry up to 5 times with 3s delays
-      let bggRes = await bggFetch(url, controller.signal)
-
-      // If 401/403, try with app credentials (allows fetching public collections)
-      if (bggRes.status === 401 || bggRes.status === 403) {
-        const cookies = await getBggCookies(controller.signal)
-        if (cookies) bggRes = await bggFetch(url, controller.signal, cookies)
-      }
-
-      for (let attempt = 0; attempt < 5 && bggRes.status === 202; attempt++) {
-        await new Promise((r) => setTimeout(r, 3000))
-        bggRes = await bggFetch(url, controller.signal)
-      }
+      // BGG may queue/throttle collection requests.
+      const { response: bggRes } = await bggFetchWithRetry(url, controller.signal, {
+        retries: 5,
+        retryDelayMs: 5000,
+        retryStatuses: [202, 500, 503],
+      })
 
       if (bggRes.status === 202) {
         return NextResponse.json({ error: 'bgg_timeout' }, { status: 503 })
@@ -229,27 +265,15 @@ export async function GET(request: NextRequest) {
     const url = q
       ? `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(q)}&type=boardgame`
       : `https://boardgamegeek.com/xmlapi2/thing?id=${numericId}&type=boardgame`
-    const apiUrl = withApiKey(url)
 
-    // Step 1: Try without authentication (works from many server IPs)
-    let bggRes = await bggFetch(apiUrl, controller.signal)
+    const { response: bggRes } = await bggFetchWithRetry(url, controller.signal, {
+      retries: 2,
+      retryDelayMs: 5000,
+      retryStatuses: [202, 500, 503],
+    })
 
-    // Step 2: If 401/403, authenticate and retry
-    if (bggRes.status === 401 || bggRes.status === 403) {
-      const cookies = await getBggCookies(controller.signal)
-      if (!cookies) {
-        return NextResponse.json({ error: 'bgg_no_credentials' }, { status: 503 })
-      }
-      bggRes = await bggFetch(apiUrl, controller.signal, cookies)
-    }
-
-    // Handle BGG's 202 "still processing" – retry once after delay
     if (bggRes.status === 202) {
-      await new Promise((r) => setTimeout(r, 3000))
-      bggRes = await bggFetch(apiUrl, controller.signal, undefined)
-      if (bggRes.status === 202) {
-        return NextResponse.json({ error: 'BGG still processing' }, { status: 503 })
-      }
+      return NextResponse.json({ error: 'BGG still processing' }, { status: 503 })
     }
 
     if (!bggRes.ok) {
@@ -262,14 +286,14 @@ export async function GET(request: NextRequest) {
       if (searchResults.length === 0) return NextResponse.json(searchResults)
 
       const ids = searchResults.map(result => result.id).join(',')
-      const thingUrl = withApiKey(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&type=boardgame`)
+      const thingUrl = `https://boardgamegeek.com/xmlapi2/thing?id=${ids}&type=boardgame`
 
       try {
-        let thingRes = await bggFetch(thingUrl, controller.signal)
-        if (thingRes.status === 401 || thingRes.status === 403) {
-          const cookies = await getBggCookies(controller.signal)
-          if (cookies) thingRes = await bggFetch(thingUrl, controller.signal, cookies)
-        }
+        const { response: thingRes } = await bggFetchWithRetry(thingUrl, controller.signal, {
+          retries: 1,
+          retryDelayMs: 5000,
+          retryStatuses: [202, 500, 503],
+        })
 
         if (thingRes.ok) {
           const thingXml = await thingRes.text()
