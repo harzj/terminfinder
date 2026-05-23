@@ -9,6 +9,13 @@ import { DefaultTimes } from '@/lib/holidays'
 import { Button } from '@/components/ui/button'
 import { CalendarDays } from 'lucide-react'
 
+function parseImportUrls(raw: string | null | undefined): string[] {
+  return (raw ?? '')
+    .split(/\r?\n/)
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
+
 interface Props {
   userId: string
   startDate: string   // Montag der aktuellen Woche
@@ -16,12 +23,16 @@ interface Props {
   initialAvailability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
   defaultTimes?: DefaultTimes | null
+  calendarImportUrl?: string | null
 }
 
-export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents, defaultTimes }: Props) {
+export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents, defaultTimes, calendarImportUrl }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [selectedImportUrl, setSelectedImportUrl] = useState<string | null>(null)
+  const [autoLoadSelectedUrl, setAutoLoadSelectedUrl] = useState(false)
+  const importUrls = parseImportUrls(calendarImportUrl)
 
   const handleSave = async (day: DayAvailability) => {
     setSaveError(null)
@@ -93,7 +104,16 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
       />
 
       <div className="mt-4">
-        <Button variant="outline" size="sm" className="w-full" onClick={() => setImportOpen(true)}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            setSelectedImportUrl(importUrls[0] ?? null)
+            setAutoLoadSelectedUrl(false)
+            setImportOpen(true)
+          }}
+        >
           <CalendarDays className="h-4 w-4 mr-2" />
           Kalender importieren
         </Button>
@@ -101,10 +121,19 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
 
       <CalendarImport
         open={importOpen}
-        onOpenChange={setImportOpen}
+        onOpenChange={(open) => {
+          setImportOpen(open)
+          if (!open) {
+            setSelectedImportUrl(null)
+            setAutoLoadSelectedUrl(false)
+          }
+        }}
         startDate={startDate}
         todayStr={todayStr}
         existingAvailability={availability}
+        initialUrl={selectedImportUrl}
+        initialUrls={importUrls}
+        autoLoadInitialUrl={autoLoadSelectedUrl}
         defaultTimes={defaultTimes}
         onImport={handleImport}
       />

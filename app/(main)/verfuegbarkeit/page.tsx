@@ -56,10 +56,11 @@ export default async function VerfuegbarkeitPage() {
   // Standard-Uhrzeiten aus Profil
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('default_availability_times')
+    .select('default_availability_times, calendar_import_url')
     .eq('id', user.id)
     .single()
   const defaultTimes = (profileData?.default_availability_times as DefaultTimes | null) ?? null
+  const calendarImportUrl = profileData?.calendar_import_url ?? null
 
   // Gruppen des Nutzers ermitteln
   const { data: memberships } = await supabase
@@ -155,6 +156,7 @@ export default async function VerfuegbarkeitPage() {
           initialAvailability={availability ?? []}
           confirmedEvents={calendarEvents}
           defaultTimes={defaultTimes}
+          calendarImportUrl={calendarImportUrl}
         />
       </section>
     </div>

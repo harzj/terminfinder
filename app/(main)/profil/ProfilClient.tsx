@@ -78,6 +78,8 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [savingImportUrl, setSavingImportUrl] = useState(false)
   const [importUrlSaved, setImportUrlSaved] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [importInitialUrl, setImportInitialUrl] = useState<string | null>(null)
+  const [autoLoadImportUrl, setAutoLoadImportUrl] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const handleSaveProfile = async () => {
@@ -181,6 +183,13 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const addImportUrl = () => {
     setImportUrlSaved(false)
     setImportUrls((prev) => [...prev, ''])
+  }
+
+  const openImportForUrl = (rawUrl?: string, autoLoad = false) => {
+    const selected = rawUrl?.trim() || importUrls.find((u) => u.trim())?.trim() || null
+    setImportInitialUrl(selected)
+    setAutoLoadImportUrl(autoLoad && !!selected)
+    setImportOpen(true)
   }
 
   const removeImportUrl = (index: number) => {
@@ -441,6 +450,17 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 shrink-0"
+                    onClick={() => openImportForUrl(urlValue, true)}
+                    disabled={!urlValue.trim()}
+                    aria-label={`Kalender ${index + 1} synchronisieren`}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
                     onClick={() => removeImportUrl(index)}
                     disabled={importUrls.length === 1}
                     aria-label={`URL ${index + 1} entfernen`}
@@ -479,7 +499,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
                 size="sm"
                 className="flex-1"
                 disabled={!importUrls.some((u) => u.trim())}
-                onClick={() => setImportOpen(true)}
+                onClick={() => openImportForUrl(undefined, false)}
               >
                 <CalendarDays className="h-4 w-4 mr-2" /> Jetzt importieren
               </Button>
@@ -496,11 +516,19 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
 
       <CalendarImport
         open={importOpen}
-        onOpenChange={setImportOpen}
+        onOpenChange={(open) => {
+          setImportOpen(open)
+          if (!open) {
+            setImportInitialUrl(null)
+            setAutoLoadImportUrl(false)
+          }
+        }}
         startDate={startDate}
         todayStr={todayStr}
         existingAvailability={initialAvailability}
-        initialUrl={importUrls.find((u) => u.trim())?.trim() ?? null}
+        initialUrl={importInitialUrl}
+        initialUrls={importUrls}
+        autoLoadInitialUrl={autoLoadImportUrl}
         defaultTimes={timesEnabled ? { start_frei: startFrei, start_werktag: startWerktag, ende_next_workday: endeNextWorkday, ende_next_free: endeNextFree } : null}
         onImport={handleProfileImport}
       />

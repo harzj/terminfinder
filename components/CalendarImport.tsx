@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { format, addDays, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { parseICSEvents, BusyEvent } from '@/lib/ics'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes, getTimesForDate } from '@/lib/holidays'
-import { Upload, Link2, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Upload, Link2, Loader2, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react'
 
 interface Props {
   open: boolean
@@ -19,6 +19,8 @@ interface Props {
   todayStr: string
   existingAvailability: DayAvailability[]
   initialUrl?: string | null
+  initialUrls?: string[]
+  autoLoadInitialUrl?: boolean
   defaultTimes?: DefaultTimes | null
   onImport: (days: DayAvailability[], toDelete: string[]) => Promise<void>
 }
@@ -163,10 +165,17 @@ function applyFilter(days: PreviewDay[], mode: FilterMode): PreviewDay[] {
 
 
 export default function CalendarImport({
-  open, onOpenChange, startDate, todayStr, existingAvailability, initialUrl, defaultTimes, onImport,
+  open, onOpenChange, startDate, todayStr, existingAvailability, initialUrl, initialUrls, autoLoadInitialUrl = false, defaultTimes, onImport,
 }: Props) {
-  const [tab, setTab] = useState<Tab>(() => initialUrl ? 'url' : 'file')
-  const [url, setUrl] = useState(initialUrl ?? '')
+  const normalizedInitialUrls = Array.from(new Set([
+    ...(initialUrls ?? []).map((v) => v.trim()).filter(Boolean),
+    ...(initialUrl?.trim() ? [initialUrl.trim()] : []),
+  ]))
+  const preferredInitialUrl = initialUrl?.trim() || normalizedInitialUrls[0] || ''
+
+  const [tab, setTab] = useState<Tab>(() => preferredInitialUrl ? 'url' : 'file')
+  const [url, setUrl] = useState(preferredInitialUrl)
+  const [savedUrls, setSavedUrls] = useState<string[]>(normalizedInitialUrls)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewDay[] | null>(null)
@@ -179,8 +188,9 @@ export default function CalendarImport({
     setError(null)
     setLoading(false)
     setSaving(false)
-    setUrl(initialUrl ?? '')
-    setTab(initialUrl ? 'url' : 'file')
+    setUrl(preferredInitialUrl)
+    setSavedUrls(normalizedInitialUrls)
+    setTab(preferredInitialUrl ? 'url' : 'file')
   }
 
   const buildPreview = (icsText: string) => {
@@ -240,18 +250,37 @@ export default function CalendarImport({
     finally { setLoading(false) }
   }
 
-  const handleUrl = async () => {
+  const handleUrl = async (urlOverride?: string) => {
+    const sourceUrl = (urlOverride ?? url).trim()
+    if (!sourceUrl) return
+    setUrl(sourceUrl)
     setError(null); setLoading(true)
     try {
       const res = await fetch('/api/calendar/import', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url: sourceUrl }),
       })
       if (!res.ok) { setError(`Fehler: ${await res.text()}`); return }
       buildPreview(await res.text())
     } catch { setError('URL konnte nicht abgerufen werden.') }
     finally { setLoading(false) }
   }
+
+  useEffect(() => {
+    if (!open) return
+    setPreview(null)
+    setError(null)
+    setLoading(false)
+    setSaving(false)
+    setSavedUrls(normalizedInitialUrls)
+    setUrl(preferredInitialUrl)
+    setTab(preferredInitialUrl ? 'url' : 'file')
+
+    if (autoLoadInitialUrl && preferredInitialUrl) {
+      void handleUrl(preferredInitialUrl)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preferredInitialUrl, autoLoadInitialUrl, initialUrl, initialUrls])
 
   const handleFilterMode = (mode: FilterMode) => {
     setFilterMode(mode)
@@ -349,6 +378,37 @@ export default function CalendarImport({
                 <p className="text-sm text-muted-foreground">
                   Gib eine ICS- oder webcal-URL ein. Diese findest du in deiner Kalender-App unter „Kalender teilen" oder „Abonnement-Link".
                 </p>
+                {savedUrls.length > 0 && (
+                  <div className="space-y-2 rounded-lg border border-border p-2">
+                    <p className="text-xs text-muted-foreground">Gespeicherte URLs</p>
+                    {savedUrls.map((savedUrl, idx) => (
+                      <div key={`${savedUrl}-${idx}`} className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setUrl(savedUrl)}
+                          className="flex-1 truncate text-left text-xs text-muted-foreground hover:text-foreground"
+                          title={savedUrl}
+                        >
+                          {savedUrl}
+                        </button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => void handleUrl(savedUrl)}
+                          disabled={loading}
+                          aria-label={`Kalender ${idx + 1} synchronisieren`}
+                        >
+                          {loading && url.trim() === savedUrl
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <RefreshCw className="h-3.5 w-3.5" />
+                          }
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <Input
                   placeholder="https://… oder webcal://…"
                   value={url}
