@@ -31,6 +31,7 @@ interface AvailabilityCalendarProps {
   onSave: (day: DayAvailability) => Promise<void>
   onDelete: (date: string) => Promise<void>
   defaultTimes?: DefaultTimes | null
+  locked?: boolean
 }
 
 const HOURS_DEFAULT = Array.from({ length: 10 }, (_, i) => i + 15)
@@ -61,6 +62,7 @@ export default function AvailabilityCalendar({
   onSave,
   onDelete,
   defaultTimes,
+  locked = false,
 }: AvailabilityCalendarProps) {
   const weekStart = parseISO(startDate)   // Montag der aktuellen Woche
   const today = parseISO(todayStr)
@@ -127,7 +129,7 @@ export default function AvailabilityCalendar({
   }
 
   const handlePointerDown = (date: Date, e: React.PointerEvent) => {
-    if (getConfirmedEvent(date) || isPastDay(date)) return
+    if (locked || getConfirmedEvent(date) || isPastDay(date)) return
     longPressFired.current = false
     pointerDownPos.current = { x: e.clientX, y: e.clientY }
     longPressTimer.current = setTimeout(() => {
@@ -147,6 +149,7 @@ export default function AvailabilityCalendar({
   }
 
   const handlePointerUp = (date: Date) => {
+    if (locked) return
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current)
       longPressTimer.current = null
@@ -209,7 +212,7 @@ export default function AvailabilityCalendar({
                 return (
                   <button
                     key={day.toISOString()}
-                    disabled={!!event || isPending || isPast}
+                    disabled={locked || !!event || isPending || isPast}
                     onPointerDown={(e) => handlePointerDown(day, e)}
                     onPointerMove={handlePointerMove}
                     onPointerUp={() => handlePointerUp(day)}
@@ -224,6 +227,8 @@ export default function AvailabilityCalendar({
                         ? 'bg-muted/40 text-muted-foreground/40 cursor-default border-border/50'
                         : event
                           ? 'bg-blue-100 text-blue-800 cursor-default'
+                          : locked
+                            ? 'bg-muted/60 text-muted-foreground/70 cursor-not-allowed'
                           : avail?.status
                             ? STATUS_COLORS[avail.status]
                             : 'bg-muted text-muted-foreground active:opacity-60'
@@ -257,7 +262,9 @@ export default function AvailabilityCalendar({
         <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Gebucht</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-muted/40 border border-border/50 inline-block" /> Vergangen</span>
       </div>
-      <p className="text-xs text-muted-foreground mt-1">Lang drücken → Uhrzeiten einstellen</p>
+      <p className="text-xs text-muted-foreground mt-1">
+        {locked ? 'Verfügbarkeit ist gesperrt' : 'Lang drücken → Uhrzeiten einstellen'}
+      </p>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl pb-8">

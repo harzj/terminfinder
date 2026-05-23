@@ -180,10 +180,6 @@ export default async function VerfuegbarkeitPage() {
 
       {/* ── Verfügbarkeitskalender ─────────────────── */}
       <section>
-        <h2 className="text-base font-semibold mb-1">Meine Verfügbarkeit</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Tippe auf einen Tag, um deine Verfügbarkeit einzutragen.
-        </p>
         <VerfuegbarkeitClient
           userId={user.id}
           startDate={weekStartStr}
