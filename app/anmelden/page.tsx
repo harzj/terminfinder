@@ -40,7 +40,11 @@ function AnmeldenForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-muted/40">
-      <Card className="w-full max-w-sm">
+      <div className="w-full max-w-sm">
+        <div className="mb-4 flex justify-center">
+          <img src="/logo.png" alt="Lass-Treffen" className="h-16 w-auto" />
+        </div>
+      <Card className="w-full">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Terminfinder</CardTitle>
           <CardDescription>Melde dich an, um deine Spieleabende zu planen</CardDescription>
@@ -68,6 +72,11 @@ function AnmeldenForm() {
           </p>
         </CardContent>
       </Card>
+
+      <div className="mt-5 flex justify-center">
+        <img src="/powered-by-bgg.webp" alt="Powered by BoardGameGeek" className="h-8 w-auto" />
+      </div>
+      </div>
     </div>
   )
 }

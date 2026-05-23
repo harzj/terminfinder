@@ -41,6 +41,11 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
+  // Öffentliche BGG-Suche (wird aus der UI für allgemeine Spielsuchen genutzt)
+  if (pathname.startsWith('/api/bgg')) {
+    return supabaseResponse
+  }
+
   // Öffentliche Routen – eingeloggte Nutzer zur Startseite weiterleiten
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
     if (user) {
