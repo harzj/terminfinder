@@ -84,7 +84,7 @@ export default function LaufendeAbstimmungen({ events, userId, availability }: P
           {filtered.map((event: any) => {
             const myResponse = (event.event_responses ?? []).find((r: any) => r.user_id === userId)?.response
             return (
-              <Link key={event.id} href={`/gruppen/${event.group_id}`}>
+              <Link key={event.id} href={`/gruppen/${event.group_id}?tab=abstimmungen`}>
                 <div className="rounded-lg border border-border p-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium text-sm">

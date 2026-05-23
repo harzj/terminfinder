@@ -414,7 +414,7 @@ export default function CalendarImport({
                   value={url}
                   onChange={e => setUrl(e.target.value)}
                 />
-                <Button className="w-full" onClick={handleUrl} disabled={loading || !url.trim()}>
+                <Button className="w-full" onClick={() => void handleUrl()} disabled={loading || !url.trim()}>
                   {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Wird geladen…</> : 'Kalender laden'}
                 </Button>
               </div>

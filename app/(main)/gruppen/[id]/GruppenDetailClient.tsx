@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +29,11 @@ interface Props {
 export default function GruppenDetailClient({
   group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, bggUsername, bggCollection
 }: Props) {
+  const searchParams = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const defaultTab = requestedTab === 'abstimmungen' || requestedTab === 'naechste' || requestedTab === 'archiv'
+    ? requestedTab
+    : 'uebersicht'
   const votingCount = events.filter((e: any) => e.status === 'voting').length
 
   return (
@@ -47,7 +53,7 @@ export default function GruppenDetailClient({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="uebersicht" className="flex-1">
+      <Tabs defaultValue={defaultTab} className="flex-1">
         <TabsList className="w-full rounded-none border-b border-border bg-background h-auto p-0">
           <TabsTrigger value="uebersicht" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary py-3">
             Übersicht
