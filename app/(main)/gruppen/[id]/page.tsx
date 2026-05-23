@@ -72,7 +72,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   // Aktive Events der Gruppe laden
   const { data: events } = await supabase
     .from('events')
-    .select('*, profiles(display_name), event_responses(user_id, response, previous_response, profiles(display_name))')
+    .select('*, profiles(display_name), event_responses(user_id, response, previous_response, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
     .in('status', ['voting', 'confirmed'])
     .gte('proposed_date', todayStr)

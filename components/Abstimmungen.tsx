@@ -24,6 +24,7 @@ interface BggSearchItem {
   id: number
   name: string
   year?: number
+  thumbnail_url: string | null
 }
 
 interface Props {
@@ -53,6 +54,7 @@ function computeOverlap(availabilities: any[], date: string): { from: string; un
 export default function Abstimmungen({ group, events, currentUserId, members, availabilities, bggUsername, bggCollection }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newFrom, setNewFrom] = useState('')
@@ -130,7 +132,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   const allResults: BggCollectionItem[] = allGameResults.map((item) => ({
     id: item.id,
     name: item.year ? `${item.name} (${item.year})` : item.name,
-    thumbnail_url: null,
+    thumbnail_url: item.thumbnail_url,
   }))
 
   const visibleResults = searchMode === 'collection' ? collectionResults : allResults
@@ -217,6 +219,16 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     setSelectedGames([])
     setGameSearch('')
     setNewNote('')
+    router.refresh()
+  }
+
+  const handleDeleteEvent = async () => {
+    if (!deleteTarget) return
+    setLoading(deleteTarget.id)
+    const supabase = createClient()
+    await supabase.from('events').delete().eq('id', deleteTarget.id)
+    setLoading(null)
+    setDeleteTarget(null)
     router.refresh()
   }
 
@@ -408,11 +420,13 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         const accepted = event.event_responses?.filter((r: any) => r.response === 'accepted') ?? []
         const declined = event.event_responses?.filter((r: any) => r.response === 'declined') ?? []
         const uncertain = event.event_responses?.filter((r: any) => r.response === 'uncertain') ?? []
+        const games = event.event_games ?? []
         const isThresholdMet = accepted.length >= event.min_participants
         const changedParticipants = (event.event_responses ?? []).filter(
           (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
         )
         const thresholdDropped = event.status === 'confirmed' && !isThresholdMet
+        const canDelete = event.status === 'voting' && event.proposed_by === currentUserId
 
         return (
           <Card key={event.id} className={cn(
@@ -437,15 +451,49 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     <p className="text-xs text-muted-foreground mt-1 italic">„{event.notes}"</p>
                   )}
                 </div>
-                <div className="text-right shrink-0">
-                  <span className={cn('text-sm font-bold', isThresholdMet ? 'text-green-600' : 'text-muted-foreground')}>
-                    {accepted.length}
-                  </span>
-                  <span className="text-xs text-muted-foreground">/{event.min_participants} nötig</span>
+                <div className="flex items-start gap-2 shrink-0">
+                  <div className="text-right">
+                    <span className={cn('text-sm font-bold', isThresholdMet ? 'text-green-600' : 'text-muted-foreground')}>
+                      {accepted.length}
+                    </span>
+                    <span className="text-xs text-muted-foreground">/{event.min_participants} nötig</span>
+                  </div>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget({ id: event.id, label: format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de }) })}
+                      className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                      aria-label="Abstimmung löschen"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              {games.length > 0 && (
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {games.map((game: any) => (
+                    <div key={game.id} className="space-y-1">
+                      {game.thumbnail_url ? (
+                        <img
+                          src={game.thumbnail_url}
+                          alt={game.name}
+                          className="aspect-[3/4] w-full rounded object-cover"
+                        />
+                      ) : (
+                        <div className="aspect-[3/4] w-full rounded bg-muted flex items-center justify-center px-1">
+                          <span className="text-[10px] leading-tight text-center text-muted-foreground line-clamp-3">
+                            {game.name}
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-muted-foreground truncate">{game.name}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
               {/* Warnhinweise */}
               {changedParticipants.length > 0 && (
                 <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2 text-xs text-amber-800">
@@ -524,6 +572,27 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
           </Card>
         )
       })}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Abstimmung löschen?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Die Abstimmung{deleteTarget ? ` vom ${deleteTarget.label}` : ''} wird vollständig entfernt, inklusive Spiele und Antworten.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={loading !== null}>
+                Abbrechen
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteEvent} disabled={loading !== null}>
+                Löschen
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

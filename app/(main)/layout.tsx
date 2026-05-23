@@ -5,6 +5,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="flex flex-col min-h-screen">
       <header className="shrink-0 border-b border-border bg-background">
+        <div className="mx-auto w-full max-w-[560px]">
         <Image
           src="/header.png"
           alt="Terminfinder"
@@ -13,6 +14,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           priority
           className="block h-auto w-full"
         />
+        </div>
       </header>
       <main className="flex-1 overflow-y-auto pb-20">
         {children}
