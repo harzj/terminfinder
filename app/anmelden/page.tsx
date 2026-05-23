@@ -82,6 +82,12 @@ function AnmeldenForm() {
           <div className="mt-5 flex justify-center">
             <img src="/powered-by-bgg.webp" alt="Powered by BoardGameGeek" className="h-8 w-auto" />
           </div>
+
+          <div className="mt-4 text-center text-xs text-muted-foreground space-x-3">
+            <Link className="underline underline-offset-2" href="/impressum">Impressum</Link>
+            <Link className="underline underline-offset-2" href="/datenschutz">Datenschutz</Link>
+            <Link className="underline underline-offset-2" href="/hinweise">Hinweise</Link>
+          </div>
         </div>
       </div>
     </div>

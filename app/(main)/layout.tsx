@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       <main className="flex-1 overflow-y-auto pb-20">
         {children}
       </main>
+      <footer className="pb-20 border-t border-border/60 bg-background/95">
+        <div className="mx-auto w-full max-w-[560px] px-4 py-3 text-xs text-muted-foreground flex items-center justify-center gap-4">
+          <Link className="underline underline-offset-2" href="/impressum">Impressum</Link>
+          <Link className="underline underline-offset-2" href="/datenschutz">Datenschutz</Link>
+          <Link className="underline underline-offset-2" href="/hinweise">Hinweise</Link>
+        </div>
+      </footer>
       <BottomNav />
     </div>
   )
