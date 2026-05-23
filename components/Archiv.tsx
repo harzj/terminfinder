@@ -21,6 +21,7 @@ interface BggResult {
   id: number
   name: string
   year?: number
+  thumbnail_url: string | null
 }
 
 interface Game {
@@ -145,12 +146,13 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
 
   const [openDialogEventId, setOpenDialogEventId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<BggResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
   const [bggError, setBggError] = useState<'no_credentials' | 'api_error' | null>(null)
   const [addingId, setAddingId] = useState<number | null>(null)
   const [manualGameAdding, setManualGameAdding] = useState(false)
   const [selectedGame, setSelectedGame] = useState<{ eventId: string; gameId: string } | null>(null)
+  const [searchMode, setSearchMode] = useState<'collection' | 'all'>('all')
+  const [allGameResults, setAllGameResults] = useState<BggResult[]>([])
+  const [searchingAllGames, setSearchingAllGames] = useState(false)
 
   // Manuelle Termin-Eingabe
   const [showManualDialog, setShowManualDialog] = useState(false)
@@ -161,40 +163,49 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
 
   const todayStr = new Date().toISOString().split('T')[0]
 
-  // Debounced BGG-Suche (nur wenn kein bggUsername gesetzt)
+  const hasPublicProfileCollection = Boolean(bggUsername?.trim()) && (bggCollection?.length ?? 0) > 0
+
   useEffect(() => {
-    if (bggUsername) return
+    if (!hasPublicProfileCollection) {
+      setSearchMode('all')
+    }
+  }, [hasPublicProfileCollection])
+
+  // Debounced BGG-Suche
+  useEffect(() => {
+    if (searchMode !== 'all') return
     if (!searchQuery.trim()) {
-      setSearchResults([])
-      setIsSearching(false)
+      setAllGameResults([])
+      setSearchingAllGames(false)
       setBggError(null)
       return
     }
-    setIsSearching(true)
+    setSearchingAllGames(true)
     setBggError(null)
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/bgg?q=${encodeURIComponent(searchQuery.trim())}`)
+        const res = await fetch(`/api/bgg?q=${encodeURIComponent(searchQuery.trim())}`, { signal: controller.signal })
         if (res.status === 503) {
           setBggError('no_credentials')
         } else if (res.ok) {
-          setSearchResults(await res.json())
+          setAllGameResults(await res.json())
         } else {
           setBggError('api_error')
         }
       } catch {
         setBggError('api_error')
       } finally {
-        setIsSearching(false)
+        setSearchingAllGames(false)
       }
     }, 300)
-    return () => { clearTimeout(timer); setIsSearching(false) }
-  }, [searchQuery, bggUsername])
+    return () => { clearTimeout(timer); controller.abort(); setSearchingAllGames(false) }
+  }, [searchQuery, searchMode])
 
   const closeDialog = () => {
     setOpenDialogEventId(null)
     setSearchQuery('')
-    setSearchResults([])
+    setAllGameResults([])
     setBggError(null)
   }
 
@@ -264,8 +275,12 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
     setAddingId(bggResult.id)
     const eventId = openDialogEventId
     try {
-      const detailRes = await fetch(`/api/bgg?id=${bggResult.id}`)
-      const detail = detailRes.ok ? await detailRes.json() : null
+      let thumbnailUrl = bggResult.thumbnail_url
+      if (!thumbnailUrl) {
+        const detailRes = await fetch(`/api/bgg?id=${bggResult.id}`)
+        const detail = detailRes.ok ? await detailRes.json() : null
+        thumbnailUrl = detail?.thumbnail ?? null
+      }
 
       const supabase = createClient()
       const { data, error } = await supabase
@@ -274,7 +289,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           event_id: eventId,
           bgg_id: bggResult.id,
           name: bggResult.name,
-          thumbnail_url: detail?.thumbnail ?? null,
+          thumbnail_url: thumbnailUrl,
           added_by: currentUserId,
         })
         .select()
@@ -434,7 +449,8 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
                   setSelectedGame(null)
                   setOpenDialogEventId(event.id)
                   setSearchQuery('')
-                  setSearchResults([])
+                    setAllGameResults([])
+                    setBggError(null)
                 }}
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -460,14 +476,30 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
           </DialogHeader>
 
           <Input
-            placeholder={bggUsername ? 'Sammlung durchsuchen…' : 'Spieltitel…'}
+            placeholder={searchMode === 'collection' ? 'Eigene Sammlung durchsuchen…' : 'Alle Spiele durchsuchen oder Namen eingeben…'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             autoFocus
           />
 
+          {hasPublicProfileCollection && (
+            <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={searchMode === 'collection'}
+                onChange={(e) => {
+                  setSearchMode(e.target.checked ? 'collection' : 'all')
+                  setSearchQuery('')
+                  setAllGameResults([])
+                }}
+                className="h-4 w-4"
+              />
+              Eigene Spiele verwenden (sonst alle Spiele)
+            </label>
+          )}
+
           {/* BGG-Sammlung Modus */}
-          {bggUsername && (
+          {searchMode === 'collection' && (
             <>
               {!bggCollection || bggCollection.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-3">
@@ -505,48 +537,51 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
             </>
           )}
 
-          {/* Klassischer BGG-Suche-Modus (ohne bggUsername) */}
-          {!bggUsername && (
+          {/* Klassischer BGG-Suche-Modus */}
+          {searchMode === 'all' && (
             <>
-              {isSearching && (
+              {searchingAllGames && (
                 <div className="flex justify-center py-4">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
               )}
 
-              {!isSearching && searchResults.length > 0 && (
+              {!searchingAllGames && allGameResults.length > 0 && (
                 <div className="max-h-64 overflow-y-auto -mx-1 space-y-0.5">
-                  {searchResults.map(result => (
+                  {allGameResults.map(result => (
                     <button
                       key={result.id}
-                      className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center justify-between gap-2 disabled:opacity-50"
+                      className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center gap-2 disabled:opacity-50"
                       disabled={addingId !== null}
                       onClick={() => handleAddGame(result)}
                     >
-                      <span className="truncate">{result.name}{result.year ? ` (${result.year})` : ''}</span>
+                      {result.thumbnail_url && (
+                        <img src={result.thumbnail_url} alt="" className="h-8 w-8 object-cover rounded shrink-0" />
+                      )}
+                      <span className="truncate flex-1">{result.name}{result.year ? ` (${result.year})` : ''}</span>
                       {addingId === result.id && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
                     </button>
                   ))}
                 </div>
               )}
 
-              {!isSearching && searchQuery.trim() && bggError === 'no_credentials' && (
+              {!searchingAllGames && searchQuery.trim() && bggError === 'no_credentials' && (
                 <p className="text-sm text-amber-600 text-center py-4">
-                  BGG-Suche nicht verfügbar. Bitte BGG-Nutzernamen im Profil eintragen.
+                  BGG-Suche nicht verfügbar.
                 </p>
               )}
 
-              {!isSearching && searchQuery.trim() && bggError === 'api_error' && (
+              {!searchingAllGames && searchQuery.trim() && bggError === 'api_error' && (
                 <p className="text-sm text-muted-foreground text-center py-2">BGG nicht erreichbar.</p>
               )}
 
-              {!isSearching && searchQuery.trim() && !bggError && searchResults.length === 0 && (
+              {!searchingAllGames && searchQuery.trim() && !bggError && allGameResults.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-2">Keine BGG-Ergebnisse gefunden.</p>
               )}
 
               {!searchQuery.trim() && (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  Tipp: BGG-Nutzernamen im Profil eintragen, um deine eigene Sammlung zu nutzen.
+                  Tipp: Mit BGG-Nutzernamen im Profil kannst du deine eigene Sammlung durchsuchen.
                 </p>
               )}
             </>
@@ -554,7 +589,7 @@ export default function Archiv({ pastEvents, currentUserId, groupId, minParticip
 
           {/* Manuell eintragen – immer verfügbar wenn Suchbegriff vorhanden */}
           {searchQuery.trim() && (
-            <div className={(bggUsername ? (bggCollection && bggCollection.length > 0) : searchResults.length > 0) ? 'border-t border-border pt-2' : ''}>
+            <div className={(searchMode === 'collection' ? (bggCollection && bggCollection.length > 0) : allGameResults.length > 0) ? 'border-t border-border pt-2' : ''}>
               <button
                 className="w-full text-left px-3 py-2.5 rounded hover:bg-muted text-sm flex items-center gap-2 text-muted-foreground disabled:opacity-50"
                 disabled={manualGameAdding}

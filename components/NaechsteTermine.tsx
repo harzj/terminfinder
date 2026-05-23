@@ -16,7 +16,7 @@ import { CalendarCheck, Plus, X, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface BggCollectionItem { id: number; name: string; thumbnail_url: string | null }
-interface BggSearchItem { id: number; name: string; year?: number }
+interface BggSearchItem { id: number; name: string; year?: number; thumbnail_url: string | null }
 
 interface Props {
   group: any
@@ -97,7 +97,7 @@ export default function NaechsteTermine({ group, availabilities, members, startD
   const allResults: BggCollectionItem[] = allGameResults.map((item) => ({
     id: item.id,
     name: item.year ? `${item.name} (${item.year})` : item.name,
-    thumbnail_url: null,
+    thumbnail_url: item.thumbnail_url,
   }))
   const visibleResults = searchMode === 'collection' ? collectionResults : allResults
   const canAddManual = gameSearch.trim().length > 0 &&

@@ -16,8 +16,8 @@ function decodeEntities(s: string): string {
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
 }
 
-function parseSearchXml(xml: string): Array<{ id: number; name: string; year?: number }> {
-  const results: Array<{ id: number; name: string; year?: number }> = []
+function parseSearchXml(xml: string): Array<{ id: number; name: string; year?: number; thumbnail_url: string | null }> {
+  const results: Array<{ id: number; name: string; year?: number; thumbnail_url: string | null }> = []
   const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g
   let match: RegExpExecArray | null
   while ((match = itemRegex.exec(xml)) !== null) {
@@ -46,9 +46,27 @@ function parseSearchXml(xml: string): Array<{ id: number; name: string; year?: n
       id,
       name: decodeEntities(primaryName),
       year: yearMatch ? parseInt(yearMatch[1], 10) : undefined,
+      thumbnail_url: null,
     })
   }
   return results.slice(0, 20)
+}
+
+function parseThingXmlMany(xml: string): Array<{ id: number; thumbnail_url: string | null }> {
+  const results: Array<{ id: number; thumbnail_url: string | null }> = []
+  const itemRegex = /<item\b([^>]*)>([\s\S]*?)<\/item>/g
+  let match: RegExpExecArray | null
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const attrs = match[1]
+    const block = match[2]
+    const idMatch = /\bid="(\d+)"/.exec(attrs)
+    if (!idMatch) continue
+    const thumbMatch = /<thumbnail>\s*([^<\s][^<]*)\s*<\/thumbnail>/.exec(block)
+    const thumbnailRaw = thumbMatch ? thumbMatch[1].trim() : null
+    const thumbnail_url = thumbnailRaw ? (thumbnailRaw.startsWith('//') ? `https:${thumbnailRaw}` : thumbnailRaw) : null
+    results.push({ id: parseInt(idMatch[1], 10), thumbnail_url })
+  }
+  return results
 }
 
 function parseCollectionXml(xml: string): Array<{ id: number; name: string; thumbnail_url: string | null }> {
@@ -239,7 +257,36 @@ export async function GET(request: NextRequest) {
     }
 
     const xml = await bggRes.text()
-    if (q) return NextResponse.json(parseSearchXml(xml))
+    if (q) {
+      const searchResults = parseSearchXml(xml)
+      if (searchResults.length === 0) return NextResponse.json(searchResults)
+
+      const ids = searchResults.map(result => result.id).join(',')
+      const thingUrl = withApiKey(`https://boardgamegeek.com/xmlapi2/thing?id=${ids}&type=boardgame`)
+
+      try {
+        let thingRes = await bggFetch(thingUrl, controller.signal)
+        if (thingRes.status === 401 || thingRes.status === 403) {
+          const cookies = await getBggCookies(controller.signal)
+          if (cookies) thingRes = await bggFetch(thingUrl, controller.signal, cookies)
+        }
+
+        if (thingRes.ok) {
+          const thingXml = await thingRes.text()
+          const thumbnailMap = new Map(parseThingXmlMany(thingXml).map(item => [item.id, item.thumbnail_url]))
+          return NextResponse.json(
+            searchResults.map(result => ({
+              ...result,
+              thumbnail_url: thumbnailMap.get(result.id) ?? null,
+            }))
+          )
+        }
+      } catch {
+        // Fall back to plain search results when thumbnail enrichment fails.
+      }
+
+      return NextResponse.json(searchResults)
+    }
 
     const result = parseThingXml(xml)
     if (!result) return NextResponse.json({ error: 'Not found' }, { status: 404 })
