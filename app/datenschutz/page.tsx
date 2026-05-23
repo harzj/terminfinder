@@ -24,32 +24,32 @@ export default function DatenschutzPage() {
 
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">2. Verarbeitete Daten</h2>
-        <p>Bei der Nutzung der App koennen insbesondere folgende Daten verarbeitet werden:</p>
+        <p>Bei der Nutzung der App können insbesondere folgende Daten verarbeitet werden:</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Registrierungsdaten (z. B. E-Mail-Adresse, Anzeigename)</li>
-          <li>Planungsdaten (Gruppen, Termine, Abstimmungs- und Verfuegbarkeitsangaben)</li>
+          <li>Planungsdaten (Gruppen, Termine, Abstimmungs- und Verfügbarkeitsangaben)</li>
           <li>Technische Nutzungsdaten (z. B. Logdaten, Zeitstempel)</li>
         </ul>
       </section>
 
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">3. Zweck und Rechtsgrundlagen</h2>
-        <p>Die Verarbeitung erfolgt zur Bereitstellung der Funktionen von {legalMeta.appName} und zur Erfuellung der Nutzungsbeziehung.</p>
+        <p>Die Verarbeitung erfolgt zur Bereitstellung der Funktionen von {legalMeta.appName} und zur Erfüllung der Nutzungsbeziehung.</p>
       </section>
 
       <section className="space-y-2 text-sm">
-        <h2 className="text-base font-semibold">4. Empfaenger und Auftragsverarbeitung</h2>
-        <p>Zur technischen Bereitstellung koennen externe Dienstleister eingesetzt werden (Hosting, Datenbank, E-Mail-Versand).</p>
+        <h2 className="text-base font-semibold">4. Empfänger und Auftragsverarbeitung</h2>
+        <p>Zur technischen Bereitstellung können externe Dienstleister eingesetzt werden (Hosting, Datenbank, E-Mail-Versand).</p>
       </section>
 
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">5. Speicherdauer</h2>
-        <p>Personenbezogene Daten werden nur so lange gespeichert, wie es fuer die genannten Zwecke erforderlich ist oder gesetzliche Aufbewahrungsfristen bestehen.</p>
+        <p>Personenbezogene Daten werden nur so lange gespeichert, wie es für die genannten Zwecke erforderlich ist oder gesetzliche Aufbewahrungsfristen bestehen.</p>
       </section>
 
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">6. Rechte betroffener Personen</h2>
-        <p>Du hast grundsaetzlich das Recht auf Auskunft, Berichtigung, Loeschung, Einschraenkung der Verarbeitung, Datenuebertragbarkeit und Widerspruch.</p>
+        <p>Du hast grundsätzlich das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch.</p>
       </section>
 
       <section className="space-y-2 text-sm text-muted-foreground">

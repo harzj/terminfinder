@@ -13,23 +13,23 @@ export default function HinweisePage() {
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">Nutzung der App</h2>
         <p>
-          {legalMeta.appName} unterstuetzt bei der Terminabstimmung in Gruppen. Trotz sorgfaeltiger Entwicklung kann keine
-          Gewaehr fuer staendige Verfuegbarkeit oder vollstaendige Fehlerfreiheit uebernommen werden.
+          {legalMeta.appName} unterstützt bei der Terminabstimmung in Gruppen. Trotz sorgfältiger Entwicklung kann keine
+          Gewähr für ständige Verfügbarkeit oder vollständige Fehlerfreiheit übernommen werden.
         </p>
       </section>
 
       <section className="space-y-2 text-sm">
-        <h2 className="text-base font-semibold">Haftung fuer Inhalte</h2>
+        <h2 className="text-base font-semibold">Haftung für Inhalte</h2>
         <p>
-          Die bereitgestellten Inhalte werden mit grosser Sorgfalt erstellt. Fuer die Richtigkeit, Vollstaendigkeit und
-          Aktualitaet wird jedoch keine Gewaehr uebernommen.
+          Die bereitgestellten Inhalte werden mit großer Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und
+          Aktualität wird jedoch keine Gewähr übernommen.
         </p>
       </section>
 
       <section className="space-y-2 text-sm">
-        <h2 className="text-base font-semibold">Haftung fuer externe Links</h2>
+        <h2 className="text-base font-semibold">Haftung für externe Links</h2>
         <p>
-          Diese Website kann Verknuepfungen zu externen Diensten enthalten. Fuer deren Inhalte sind ausschliesslich die
+          Diese Website kann Verknüpfungen zu externen Diensten enthalten. Für deren Inhalte sind ausschließlich die
           jeweiligen Betreiber verantwortlich.
         </p>
       </section>
@@ -37,7 +37,7 @@ export default function HinweisePage() {
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">Urheberrecht</h2>
         <p>
-          Inhalte und Darstellungen auf dieser Website unterliegen dem geltenden Urheberrecht. Eine Nutzung ausserhalb
+          Inhalte und Darstellungen auf dieser Website unterliegen dem geltenden Urheberrecht. Eine Nutzung außerhalb
           der gesetzlichen Grenzen bedarf der vorherigen Zustimmung der Rechteinhaber.
         </p>
       </section>

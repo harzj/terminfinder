@@ -11,7 +11,7 @@ export default function ImpressumPage() {
       <h1 className="text-2xl font-bold">Impressum</h1>
 
       <section className="space-y-2 text-sm">
-        <h2 className="text-base font-semibold">Angaben gemaess Paragraph 5 TMG</h2>
+        <h2 className="text-base font-semibold">Angaben gemäß § 5 TMG</h2>
         <p>{legalContact.operatorName}</p>
         <p>{legalContact.street}</p>
         <p>{legalContact.postalCode} {legalContact.city}</p>
@@ -29,7 +29,7 @@ export default function ImpressumPage() {
       </section>
 
       <section className="space-y-2 text-sm">
-        <h2 className="text-base font-semibold">Verantwortlich fuer den Inhalt</h2>
+        <h2 className="text-base font-semibold">Verantwortlich für den Inhalt</h2>
         <p>{legalContact.operatorName}</p>
         <p>{legalContact.street}, {legalContact.postalCode} {legalContact.city}</p>
       </section>
