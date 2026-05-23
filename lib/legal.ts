@@ -1,6 +1,6 @@
 export const legalContact = {
   operatorName: 'Johannes Harz',
-  street: '---',
+  street: 'Winterbacher Str. 3a',
   postalCode: '66606',
   city: 'St. Wendel',
   country: 'Deutschland',

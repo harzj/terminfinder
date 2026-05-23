@@ -13,7 +13,6 @@ export default function DatenschutzPage() {
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">1. Verantwortlicher</h2>
         <p>{legalContact.operatorName}</p>
-        <p>{legalContact.street}, {legalContact.postalCode} {legalContact.city}</p>
         <p>
           E-Mail:{' '}
           <a className="underline underline-offset-2" href={`mailto:${legalContact.email}`}>
@@ -54,7 +53,6 @@ export default function DatenschutzPage() {
 
       <section className="space-y-2 text-sm text-muted-foreground">
         <p>Stand: {legalMeta.lastUpdated}</p>
-        <p>Hinweis: Dies ist ein technischer Mustertext und keine Rechtsberatung.</p>
       </section>
 
       <div className="pt-2 text-sm">
