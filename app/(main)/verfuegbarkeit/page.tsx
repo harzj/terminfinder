@@ -75,7 +75,7 @@ export default async function VerfuegbarkeitPage() {
   const upcomingConfirmed = groupIds.length > 0
     ? (await supabase
         .from('events')
-        .select('id, group_id, proposed_date, from_time, until_time, groups(id, name), event_responses(user_id, response, previous_response)')
+        .select('id, group_id, proposed_date, from_time, until_time, min_participants, groups(id, name), event_responses(user_id, response, previous_response), event_games(id, name, thumbnail_url)')
         .in('group_id', groupIds)
         .eq('status', 'confirmed')
         .gte('proposed_date', todayStr)
@@ -108,21 +108,56 @@ export default async function VerfuegbarkeitPage() {
           </h2>
           <div className="space-y-2">
             {upcomingConfirmed.map((event: any) => {
+              const games = event.event_games ?? []
               const hasChanges = (event.event_responses ?? []).some(
                 (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
               )
+              const acceptedCount = (event.event_responses ?? []).filter((r: any) => r.response === 'accepted').length
+              const belowThreshold = acceptedCount < (event.min_participants ?? 0)
+
+              const cardClasses = belowThreshold
+                ? 'rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900 p-3 flex items-center justify-between gap-3'
+                : hasChanges
+                  ? 'rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-3 flex items-center justify-between gap-3'
+                  : 'rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-3 flex items-center justify-between gap-3'
+
+              const alertColor = belowThreshold ? 'text-red-500' : 'text-amber-500'
+
               return (
-              <Link key={event.id} href={`/gruppen/${event.group_id}`}>
-                <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-900 p-3 flex items-center justify-between gap-3">
+              <Link key={event.id} href={`/gruppen/${event.group_id}?tab=abstimmungen`}>
+                <div className={cardClasses}>
                   <div>
                     <p className="font-medium text-sm flex items-center gap-1.5">
                       {format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de })}
-                      {hasChanges && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                      {hasChanges && <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${alertColor}`} />}
                     </p>
                     {event.from_time && (
                       <p className="text-xs text-muted-foreground">
                         {event.from_time.slice(0, 5)}{event.until_time ? ` – ${event.until_time.slice(0, 5)}` : ''} Uhr
                       </p>
+                    )}
+                    {games.length > 0 && (
+                      <div className="mt-1.5 flex items-center gap-1">
+                        {games.slice(0, 6).map((game: any) => (
+                          game.thumbnail_url ? (
+                            <img
+                              key={game.id}
+                              src={game.thumbnail_url}
+                              alt={game.name}
+                              className="h-9 w-[27px] rounded object-cover"
+                            />
+                          ) : (
+                            <div
+                              key={game.id}
+                              className="h-9 w-[27px] rounded bg-muted"
+                              title={game.name}
+                            />
+                          )
+                        ))}
+                        {games.length > 6 && (
+                          <span className="text-[10px] text-muted-foreground ml-1">+{games.length - 6}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <Badge className="bg-green-600 shrink-0 text-xs">{event.groups?.name ?? ''}</Badge>
