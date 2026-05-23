@@ -87,6 +87,7 @@ export default function GruppenDetailClient({
             currentUserId={currentUserId}
             members={members}
             availabilities={availabilities}
+            bggUsername={bggUsername}
             bggCollection={bggCollection}
           />
         </TabsContent>
@@ -101,6 +102,7 @@ export default function GruppenDetailClient({
             currentUserId={currentUserId}
             events={events}
             blockedDates={blockedDates}
+            bggUsername={bggUsername}
             bggCollection={bggCollection}
           />
         </TabsContent>

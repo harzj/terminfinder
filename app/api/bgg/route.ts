@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+function withApiKey(url: string): string {
+  const key = process.env.BGG_API_KEY
+  if (!key) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}api_key=${encodeURIComponent(key)}`
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, '&')
@@ -147,7 +154,7 @@ export async function GET(request: NextRequest) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30_000)
     try {
-      const url = `https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`
+      const url = withApiKey(`https://boardgamegeek.com/xmlapi2/collection?username=${encodeURIComponent(username)}&own=1&excludesubtype=boardgameexpansion`)
 
       // BGG queues collection requests – retry up to 5 times with 3s delays
       let bggRes = await bggFetch(url, controller.signal)
@@ -204,9 +211,10 @@ export async function GET(request: NextRequest) {
     const url = q
       ? `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(q)}&type=boardgame`
       : `https://boardgamegeek.com/xmlapi2/thing?id=${numericId}&type=boardgame`
+    const apiUrl = withApiKey(url)
 
     // Step 1: Try without authentication (works from many server IPs)
-    let bggRes = await bggFetch(url, controller.signal)
+    let bggRes = await bggFetch(apiUrl, controller.signal)
 
     // Step 2: If 401/403, authenticate and retry
     if (bggRes.status === 401 || bggRes.status === 403) {
@@ -214,13 +222,13 @@ export async function GET(request: NextRequest) {
       if (!cookies) {
         return NextResponse.json({ error: 'bgg_no_credentials' }, { status: 503 })
       }
-      bggRes = await bggFetch(url, controller.signal, cookies)
+      bggRes = await bggFetch(apiUrl, controller.signal, cookies)
     }
 
     // Handle BGG's 202 "still processing" – retry once after delay
     if (bggRes.status === 202) {
       await new Promise((r) => setTimeout(r, 3000))
-      bggRes = await bggFetch(url, controller.signal, undefined)
+      bggRes = await bggFetch(apiUrl, controller.signal, undefined)
       if (bggRes.status === 202) {
         return NextResponse.json({ error: 'BGG still processing' }, { status: 503 })
       }

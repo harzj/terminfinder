@@ -20,12 +20,19 @@ interface BggCollectionItem {
   thumbnail_url: string | null
 }
 
+interface BggSearchItem {
+  id: number
+  name: string
+  year?: number
+}
+
 interface Props {
   group: any
   events: any[]
   currentUserId: string
   members: any[]
   availabilities: any[]
+  bggUsername?: string | null
   bggCollection?: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
 }
 
@@ -43,7 +50,7 @@ function computeOverlap(availabilities: any[], date: string): { from: string; un
   return latestStart < earliestEnd ? { from: latestStart.slice(0, 5), until: earliestEnd.slice(0, 5) } : null
 }
 
-export default function Abstimmungen({ group, events, currentUserId, members, availabilities, bggCollection }: Props) {
+export default function Abstimmungen({ group, events, currentUserId, members, availabilities, bggUsername, bggCollection }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -71,10 +78,62 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   // Spiele-Vorschlag
   const [selectedGames, setSelectedGames] = useState<BggCollectionItem[]>([])
   const [gameSearch, setGameSearch] = useState('')
+  const [searchMode, setSearchMode] = useState<'collection' | 'all'>('all')
+  const [allGameResults, setAllGameResults] = useState<BggSearchItem[]>([])
+  const [searchingAllGames, setSearchingAllGames] = useState(false)
+
+  const hasPublicProfileCollection = Boolean(bggUsername?.trim()) && (bggCollection?.length ?? 0) > 0
+
+  useEffect(() => {
+    if (!hasPublicProfileCollection) {
+      setSearchMode('all')
+    }
+  }, [hasPublicProfileCollection])
+
+  useEffect(() => {
+    if (searchMode !== 'all') return
+    const query = gameSearch.trim()
+    if (!query) {
+      setAllGameResults([])
+      setSearchingAllGames(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      setSearchingAllGames(true)
+      try {
+        const res = await fetch(`/api/bgg?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        if (!res.ok) {
+          setAllGameResults([])
+          return
+        }
+        const data: BggSearchItem[] = await res.json()
+        setAllGameResults(data)
+      } catch {
+        setAllGameResults([])
+      } finally {
+        setSearchingAllGames(false)
+      }
+    }, 300)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [gameSearch, searchMode])
 
   const collectionResults = bggCollection && gameSearch.trim()
     ? bggCollection.filter(g => g.name.toLowerCase().includes(gameSearch.trim().toLowerCase())).slice(0, 15)
     : []
+
+  const allResults: BggCollectionItem[] = allGameResults.map((item) => ({
+    id: item.id,
+    name: item.year ? `${item.name} (${item.year})` : item.name,
+    thumbnail_url: null,
+  }))
+
+  const visibleResults = searchMode === 'collection' ? collectionResults : allResults
 
   const canAddManual = gameSearch.trim().length > 0 &&
     !selectedGames.some(g => g.name.toLowerCase() === gameSearch.trim().toLowerCase())
@@ -238,23 +297,44 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     ))}
                   </div>
                 )}
-                <div className="flex gap-2">
+                <div className="space-y-2">
+                  {hasPublicProfileCollection && (
+                    <label className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={searchMode === 'collection'}
+                        onChange={(e) => {
+                          setSearchMode(e.target.checked ? 'collection' : 'all')
+                          setGameSearch('')
+                          setAllGameResults([])
+                        }}
+                        className="h-4 w-4"
+                      />
+                      Eigene Spiele verwenden (sonst alle Spiele)
+                    </label>
+                  )}
+
+                  <div className="flex gap-2">
                   <Input
-                    placeholder={bggCollection && bggCollection.length > 0 ? 'Sammlung durchsuchen oder Namen eingeben…' : 'Spielname eingeben…'}
+                    placeholder={searchMode === 'collection' ? 'Eigene Sammlung durchsuchen…' : 'Alle Spiele durchsuchen oder Namen eingeben…'}
                     value={gameSearch}
                     onChange={e => setGameSearch(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (collectionResults.length === 0 && canAddManual) addManualGame() } }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (visibleResults.length === 0 && canAddManual) addManualGame() } }}
                     autoComplete="off"
                   />
-                  {canAddManual && collectionResults.length === 0 && (
+                  {canAddManual && visibleResults.length === 0 && (
                     <Button type="button" variant="outline" size="sm" onClick={addManualGame} className="shrink-0">
                       <Plus className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
-                {(collectionResults.length > 0 || (canAddManual && (bggCollection?.length ?? 0) > 0)) && (
+                </div>
+                {searchingAllGames && searchMode === 'all' && gameSearch.trim() && (
+                  <p className="text-xs text-muted-foreground">Suche in BGG…</p>
+                )}
+                {(visibleResults.length > 0 || canAddManual) && (
                   <div className="max-h-40 overflow-y-auto border border-border rounded-md divide-y divide-border">
-                    {collectionResults.map(item => {
+                    {visibleResults.map(item => {
                       const isSelected = selectedGames.some(g => g.id === item.id)
                       return (
                         <button key={item.id} type="button" onClick={() => toggleGame(item)}
@@ -274,6 +354,13 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     )}
                   </div>
                 )}
+                <div className="pt-1">
+                  <img
+                    src="/powered-by-bgg.webp"
+                    alt="Powered by BoardGameGeek"
+                    className="h-5 w-auto opacity-80"
+                  />
+                </div>
               </div>
 
               <Button type="submit" className="w-full" disabled={creating}>

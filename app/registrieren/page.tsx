@@ -39,7 +39,7 @@ function RegistrierenForm() {
     }
     const invite = searchParams.get('invite')
     if (invite) {
-      router.push(/einladen/+invite)
+      router.push(`/einladen/${invite}`)
     } else {
       router.push('/verfuegbarkeit')
     }
