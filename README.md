@@ -29,6 +29,43 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Domain And Mail Setup
+
+This app is being moved from personal mail/Gmail to a custom domain and Resend-based sending.
+
+Recommended setup:
+
+1. Use `lass-treffen.de` as the public brand domain.
+2. Configure DNS for Resend:
+	- SPF record
+	- DKIM record(s)
+	- DMARC record
+3. Set Supabase Auth SMTP to the Resend SMTP credentials.
+4. Set `NEXT_PUBLIC_SITE_URL` to the production app URL.
+5. Use `RESEND_FROM_EMAIL` for all outgoing system mail, e.g. `Terminfinder <noreply@lass-treffen.de>`.
+
+Environment variables:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+NEXT_PUBLIC_SITE_URL=https://lass-treffen.de
+
+RESEND_API_KEY=
+RESEND_FROM_EMAIL="Terminfinder <noreply@lass-treffen.de>"
+RESEND_REPLY_TO_EMAIL=
+```
+
+Planned notification types:
+
+1. Neuer Termin zur Abstimmung
+2. Erinnerung an Spieleabend
+3. Jemand hat seine Meinung geändert
+
+The code now contains a reusable Resend helper in [lib/email/resend.ts](lib/email/resend.ts) and starter templates in [lib/email/templates.ts](lib/email/templates.ts).
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
