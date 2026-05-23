@@ -233,8 +233,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   }
 
   const votingEvents = events.filter((e: any) => e.status === 'voting')
-  const confirmedEvents = events.filter((e: any) => e.status === 'confirmed')
-  const allEvents = [...confirmedEvents, ...votingEvents].sort((a: any, b: any) =>
+  const allEvents = [...votingEvents].sort((a: any, b: any) =>
     a.proposed_date < b.proposed_date ? -1 : 1
   )
 
@@ -383,30 +382,6 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         </Dialog>
       </div>
 
-      {confirmedEvents.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-medium text-green-700">Bestätigte Termine</h3>
-          {confirmedEvents.map((event: any) => (
-            <Card key={event.id} className="border-green-200 bg-green-50">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <CardTitle className="text-sm">
-                    {format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de })}
-                    {event.from_time && ` · ${event.from_time.slice(0,5)}${event.until_time ? `–${event.until_time.slice(0,5)}` : ''} Uhr`}
-                  </CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground">
-                  {event.event_responses?.filter((r: any) => r.response === 'accepted').length} Zusagen
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
       {allEvents.length === 0 && (
         <div className="text-center py-10 text-muted-foreground">
           <Calendar className="h-10 w-10 mx-auto mb-2 opacity-30" />
@@ -422,17 +397,23 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         const uncertain = event.event_responses?.filter((r: any) => r.response === 'uncertain') ?? []
         const games = event.event_games ?? []
         const isThresholdMet = accepted.length >= event.min_participants
+        const canStillSucceed = (accepted.length + uncertain.length) >= event.min_participants
         const changedParticipants = (event.event_responses ?? []).filter(
           (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
         )
-        const thresholdDropped = event.status === 'confirmed' && !isThresholdMet
+        const hasChangedAccepted = changedParticipants.length > 0
         const canDelete = event.status === 'voting' && event.proposed_by === currentUserId
 
+        const borderClass = hasChangedAccepted
+          ? (isThresholdMet ? 'border-amber-500 border-2' : 'border-red-500 border-2')
+          : isThresholdMet
+            ? 'border-green-500 border-2'
+            : canStillSucceed
+              ? 'border-border'
+              : 'border-red-500 border-2'
+
         return (
-          <Card key={event.id} className={cn(
-            event.status === 'confirmed' && isThresholdMet && !thresholdDropped && 'border-green-500 border-2',
-            thresholdDropped && 'border-red-500 border-2',
-          )}>
+          <Card key={event.id} className={cn(borderClass)}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -506,7 +487,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                   </span>
                 </div>
               )}
-              {thresholdDropped && (
+              {hasChangedAccepted && !isThresholdMet && (
                 <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2 text-xs text-red-700">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
                   <span>Die Mindestteilnehmerzahl wurde durch Änderungen unterschritten. Bitte prüfen!</span>
