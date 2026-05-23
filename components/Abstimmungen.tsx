@@ -233,7 +233,8 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   }
 
   const votingEvents = events.filter((e: any) => e.status === 'voting')
-  const allEvents = [...votingEvents].sort((a: any, b: any) =>
+  const confirmedEvents = events.filter((e: any) => e.status === 'confirmed')
+  const allEvents = [...confirmedEvents, ...votingEvents].sort((a: any, b: any) =>
     a.proposed_date < b.proposed_date ? -1 : 1
   )
 
@@ -401,16 +402,18 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         const changedParticipants = (event.event_responses ?? []).filter(
           (r: any) => r.previous_response === 'accepted' && r.response !== 'accepted'
         )
-        const hasChangedAccepted = changedParticipants.length > 0
+        const hasChangedAccepted = event.status === 'confirmed' && changedParticipants.length > 0
         const canDelete = event.status === 'voting' && event.proposed_by === currentUserId
 
-        const borderClass = hasChangedAccepted
-          ? (isThresholdMet ? 'border-amber-500 border-2' : 'border-red-500 border-2')
-          : isThresholdMet
+        const borderClass = event.status === 'confirmed'
+          ? (hasChangedAccepted
+            ? (isThresholdMet ? 'border-amber-500 border-2' : 'border-red-500 border-2')
+            : 'border-green-500 border-2')
+          : (isThresholdMet
             ? 'border-green-500 border-2'
             : canStillSucceed
               ? 'border-border'
-              : 'border-red-500 border-2'
+              : 'border-red-500 border-2')
 
         return (
           <Card key={event.id} className={cn(borderClass)}>
@@ -476,7 +479,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                 </div>
               )}
               {/* Warnhinweise */}
-              {changedParticipants.length > 0 && (
+              {hasChangedAccepted && (
                 <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 flex items-start gap-2 text-xs text-amber-800">
                   <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
                   <span>

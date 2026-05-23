@@ -227,11 +227,11 @@ export default function AvailabilityCalendar({
                         ? 'bg-muted/40 text-muted-foreground/40 cursor-default border-border/50'
                         : event
                           ? 'bg-blue-100 text-blue-800 cursor-default'
-                          : locked
-                            ? 'bg-muted/60 text-muted-foreground/70 cursor-not-allowed'
                           : avail?.status
                             ? STATUS_COLORS[avail.status]
-                            : 'bg-muted text-muted-foreground active:opacity-60'
+                            : locked
+                              ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                              : 'bg-muted text-muted-foreground active:opacity-60'
                     )}
                   >
                     <span className="text-[10px] leading-none">

@@ -116,7 +116,10 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
             onClick={toggleLocked}
             aria-label={locked ? 'Verfügbarkeit entsperren' : 'Verfügbarkeit sperren'}
             title={locked ? 'Verfügbarkeit entsperren' : 'Verfügbarkeit sperren'}
-            className="inline-flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            className={locked
+              ? 'inline-flex h-6 w-6 items-center justify-center rounded border border-red-300 text-red-600 bg-red-50 hover:bg-red-100'
+              : 'inline-flex h-6 w-6 items-center justify-center rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted'
+            }
           >
             {locked ? <Lock className="h-3.5 w-3.5" /> : <LockOpen className="h-3.5 w-3.5" />}
           </button>
