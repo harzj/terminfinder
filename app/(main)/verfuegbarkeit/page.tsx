@@ -166,7 +166,6 @@ export default async function VerfuegbarkeitPage() {
             )
             })}
           </div>
-          </div>
         </section>
       )}
 
