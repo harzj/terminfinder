@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell, ChevronDown } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell, BellOff, ChevronDown } from 'lucide-react'
 import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
@@ -86,6 +86,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
 
   const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'done' | 'denied' | 'error'>('idle')
   const [notifError, setNotifError] = useState<string | null>(null)
+  const [disableStatus, setDisableStatus] = useState<'idle' | 'loading' | 'done'>('idle')
 
   const handleEnableNotifications = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -135,6 +136,27 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       console.error('Push-Subscription fehlgeschlagen:', err)
       setNotifError(err instanceof Error ? err.message : 'Unbekannter Fehler')
       setNotifStatus('error')
+    }
+  }
+
+  const handleDisableNotifications = async () => {
+    if (disableStatus === 'loading') return
+    setDisableStatus('loading')
+    try {
+      const registration = await navigator.serviceWorker.ready
+      const subscription = await registration.pushManager.getSubscription()
+      if (subscription) {
+        await subscription.unsubscribe()
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        })
+      }
+      setDisableStatus('done')
+      setTimeout(() => setDisableStatus('idle'), 2500)
+    } catch {
+      setDisableStatus('idle')
     }
   }
 
@@ -584,9 +606,10 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       </Card>
 
       {/* Benachrichtigungen */}
+      <div className="flex gap-2">
       <Button
         variant="outline"
-        className="w-full"
+        className="flex-1"
         onClick={handleEnableNotifications}
         disabled={notifStatus === 'requesting'}
       >
@@ -605,6 +628,22 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
           ? 'Fehler – erneut versuchen'
           : 'Benachrichtigungen aktivieren'}
       </Button>
+      <Button
+        variant="outline"
+        className="flex-1"
+        onClick={handleDisableNotifications}
+        disabled={disableStatus === 'loading'}
+      >
+        {disableStatus === 'loading' ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : disableStatus === 'done' ? (
+          <Check className="h-4 w-4 mr-2" />
+        ) : (
+          <BellOff className="h-4 w-4 mr-2" />
+        )}
+        {disableStatus === 'done' ? 'Deaktiviert' : 'Benachrichtigungen aus'}
+      </Button>
+      </div>
       {(notifStatus === 'error' || notifStatus === 'denied') && notifError && (
         <p className="text-xs text-destructive -mt-2">{notifError}</p>
       )}
