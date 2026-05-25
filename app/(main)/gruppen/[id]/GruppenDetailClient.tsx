@@ -53,7 +53,7 @@ export default function GruppenDetailClient({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue={defaultTab} className="flex-1">
+      <Tabs key={defaultTab} defaultValue={defaultTab} className="flex-1">
         <TabsList className="w-full rounded-none border-b border-border bg-background h-auto p-0">
           <TabsTrigger value="uebersicht" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary py-3">
             Übersicht
