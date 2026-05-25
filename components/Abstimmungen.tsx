@@ -593,7 +593,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     </button>
                   )
                 })}
-              </div>
+              </div>}
             </CardContent>
           </Card>
         )
