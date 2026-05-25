@@ -23,7 +23,7 @@ function getAdminClient() {
   );
 }
 
-type NotificationType = "new_vote" | "vote_success_check" | "vote_deleted" | "change_check";
+type NotificationType = "new_vote" | "vote_success_check" | "vote_deleted" | "change_check" | "event_cancelled";
 
 const NOTIFICATION_LABELS: Record<string, { title: string; body: string; url: string }> = {
   new_vote: {
@@ -33,12 +33,17 @@ const NOTIFICATION_LABELS: Record<string, { title: string; body: string; url: st
   },
   vote_success: {
     title: "Termin bestätigt!",
-    body: "Eine Abstimmung wurde erfolgreich abgeschlossen.",
+    body: "Der Termin findet statt – alle Zusagen sind bestätigt.",
     url: "/verfuegbarkeit",
   },
   vote_deleted: {
     title: "Abstimmung abgebrochen",
     body: "Eine Terminabstimmung wurde abgebrochen.",
+    url: "/verfuegbarkeit",
+  },
+  event_cancelled: {
+    title: "Bestätigter Termin abgesagt",
+    body: "Ein bestätigter Termin wurde vom Initiator abgesagt.",
     url: "/verfuegbarkeit",
   },
   change_1: {
@@ -53,7 +58,20 @@ const NOTIFICATION_LABELS: Record<string, { title: string; body: string; url: st
   },
 };
 
-async function sendPushToUsers(userIds: string[], notificationKey: string) {
+// Datum für Benachrichtigungstext formatieren ("Mo, 6.6.")
+function formatGermanDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const weekdays = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa']
+  const dow = new Date(y, m - 1, d).getDay()
+  return `${weekdays[dow]}, ${d}.${m}.`
+}
+
+interface EventContext {
+  groupName: string
+  date: string
+}
+
+async function sendPushToUsers(userIds: string[], notificationKey: string, ctx?: EventContext) {
   const admin = getAdminClient();
   const label = NOTIFICATION_LABELS[notificationKey];
   if (!label) return;
@@ -66,9 +84,18 @@ async function sendPushToUsers(userIds: string[], notificationKey: string) {
 
   if (!subscriptions || subscriptions.length === 0) return;
 
+  // Titel und Body mit Gruppenname + Datum anreichern
+  let title = label.title
+  let body = label.body
+  if (ctx) {
+    const dateStr = formatGermanDate(ctx.date)
+    title = `${label.title} · ${ctx.groupName}`
+    body = `${dateStr}: ${label.body}`
+  }
+
   const payload = JSON.stringify({
-    title: label.title,
-    body: label.body,
+    title,
+    body,
     url: label.url,
   });
 
@@ -126,10 +153,10 @@ export async function POST(req: NextRequest) {
 
   const admin = getAdminClient();
 
-  // Event laden
+  // Event laden (inkl. Gruppenname für Benachrichtigungstext)
   const { data: event } = await admin
     .from("events")
-    .select("id, group_id, status, min_participants")
+    .select("id, group_id, status, min_participants, proposed_date, groups(name)")
     .eq("id", eventId)
     .single();
 
@@ -146,26 +173,38 @@ export async function POST(req: NextRequest) {
   const userIds = (members ?? []).map((m) => m.user_id as string).filter(Boolean);
   if (userIds.length === 0) return NextResponse.json({ ok: true, skipped: "no_members" });
 
+  const ctx: EventContext = {
+    groupName: (event.groups as any)?.name ?? 'Gruppe',
+    date: event.proposed_date,
+  }
+
   // ── Benachrichtigungstypen ──────────────────────────────────────────────
 
   if (type === "new_vote") {
     if (await checkDedup(eventId, "new_vote")) return NextResponse.json({ ok: true, dedup: true });
-    await sendPushToUsers(userIds, "new_vote");
+    await sendPushToUsers(userIds, "new_vote", ctx);
     await markSent(eventId, "new_vote");
     return NextResponse.json({ ok: true });
   }
 
   if (type === "vote_deleted") {
     if (await checkDedup(eventId, "vote_deleted")) return NextResponse.json({ ok: true, dedup: true });
-    await sendPushToUsers(userIds, "vote_deleted");
+    await sendPushToUsers(userIds, "vote_deleted", ctx);
     await markSent(eventId, "vote_deleted");
+    return NextResponse.json({ ok: true });
+  }
+
+  if (type === "event_cancelled") {
+    if (await checkDedup(eventId, "event_cancelled")) return NextResponse.json({ ok: true, dedup: true });
+    await sendPushToUsers(userIds, "event_cancelled", ctx);
+    await markSent(eventId, "event_cancelled");
     return NextResponse.json({ ok: true });
   }
 
   if (type === "vote_success_check") {
     if (event.status !== "confirmed") return NextResponse.json({ ok: true, skipped: "not_confirmed" });
     if (await checkDedup(eventId, "vote_success")) return NextResponse.json({ ok: true, dedup: true });
-    await sendPushToUsers(userIds, "vote_success");
+    await sendPushToUsers(userIds, "vote_success", ctx);
     await markSent(eventId, "vote_success");
     return NextResponse.json({ ok: true });
   }
@@ -186,7 +225,7 @@ export async function POST(req: NextRequest) {
       (r) => r.previous_response === "accepted" && r.response !== "accepted"
     );
     if (hasChange1 && !(await checkDedup(eventId, "change_1"))) {
-      await sendPushToUsers(userIds, "change_1");
+      await sendPushToUsers(userIds, "change_1", ctx);
       await markSent(eventId, "change_1");
       results.push("change_1");
     }
@@ -194,7 +233,7 @@ export async function POST(req: NextRequest) {
     // Typ 4.2: Anzahl Zusagen < Mindestteilnehmer
     const acceptedCount = (responses ?? []).filter((r) => r.response === "accepted").length;
     if (acceptedCount < event.min_participants && !(await checkDedup(eventId, "change_2"))) {
-      await sendPushToUsers(userIds, "change_2");
+      await sendPushToUsers(userIds, "change_2", ctx);
       await markSent(eventId, "change_2");
       results.push("change_2");
     }

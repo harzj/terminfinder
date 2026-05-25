@@ -69,16 +69,16 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
     .gte('date', startStr)
     .lte('date', endStr)
 
-  // Aktive Events der Gruppe laden
+  // Aktive Events der Gruppe laden (inkl. cancelled, damit sie sichtbar bleiben)
   const { data: events } = await supabase
     .from('events')
     .select('*, profiles(display_name), event_responses(user_id, response, previous_response, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
-    .in('status', ['voting', 'confirmed'])
+    .in('status', ['voting', 'confirmed', 'cancelled'])
     .gte('proposed_date', todayStr)
     .order('proposed_date')
 
-  // Blockierte Tage: bestätigte Events in ANDEREN Gruppen des Nutzers (unabhängig von dessen Antwort)
+  // Blockierte Tage: bestätigte Events in ANDEREN Gruppen, bei denen der Nutzer zugesagt hat
   const { data: otherMemberships } = await supabase
     .from('group_members')
     .select('group_id')
@@ -90,14 +90,26 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
 
   let blockedDates: string[] = []
   if (otherGroupIds.length > 0) {
-    const { data: otherEvents } = await supabase
-      .from('events')
-      .select('proposed_date')
-      .in('group_id', otherGroupIds)
-      .eq('status', 'confirmed')
-      .gte('proposed_date', todayStr)
-      .lte('proposed_date', endStr)
-    blockedDates = (otherEvents ?? []).map((e: any) => e.proposed_date as string)
+    // Nur Events berücksichtigen, bei denen der Nutzer selbst zugesagt hat
+    const { data: acceptedResponses } = await supabase
+      .from('event_responses')
+      .select('event_id')
+      .eq('user_id', user.id)
+      .eq('response', 'accepted')
+
+    const acceptedEventIds = (acceptedResponses ?? []).map((r: any) => r.event_id as string)
+
+    if (acceptedEventIds.length > 0) {
+      const { data: otherEvents } = await supabase
+        .from('events')
+        .select('proposed_date')
+        .in('group_id', otherGroupIds)
+        .eq('status', 'confirmed')
+        .in('id', acceptedEventIds)
+        .gte('proposed_date', todayStr)
+        .lte('proposed_date', endStr)
+      blockedDates = (otherEvents ?? []).map((e: any) => e.proposed_date as string)
+    }
   }
 
   // Vergangene bestätigte Termine (Archiv)

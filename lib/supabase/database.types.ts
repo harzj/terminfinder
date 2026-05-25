@@ -140,9 +140,10 @@ export interface Database {
           from_time: string | null
           until_time: string | null
           min_participants: number
-          status: 'voting' | 'confirmed' | 'expired'
+          status: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by: string
           notes: string | null
+          cancelled_at: string | null
           created_at: string
         }
         Insert: {
@@ -152,9 +153,10 @@ export interface Database {
           from_time?: string | null
           until_time?: string | null
           min_participants?: number
-          status?: 'voting' | 'confirmed' | 'expired'
+          status?: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by: string
           notes?: string | null
+          cancelled_at?: string | null
           created_at?: string
         }
         Update: {
@@ -164,9 +166,10 @@ export interface Database {
           from_time?: string | null
           until_time?: string | null
           min_participants?: number
-          status?: 'voting' | 'confirmed' | 'expired'
+          status?: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by?: string
           notes?: string | null
+          cancelled_at?: string | null
           created_at?: string
         }
         Relationships: []

@@ -62,11 +62,32 @@ export async function GET(
     })
   }
 
+  // Nur Events laden, bei denen der Nutzer selbst zugesagt hat
+  const { data: acceptedResponses } = await supabase
+    .from('event_responses')
+    .select('event_id')
+    .eq('user_id', profile.id)
+    .eq('response', 'accepted')
+
+  const acceptedEventIds = (acceptedResponses ?? []).map((r: any) => r.event_id as string)
+
+  if (acceptedEventIds.length === 0) {
+    const ics = generateICS([])
+    return new Response(ics, {
+      headers: {
+        'Content-Type': 'text/calendar; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="terminfinder.ics"',
+        'Cache-Control': 'no-cache, no-store',
+      },
+    })
+  }
+
   const { data: events } = await supabase
     .from('events')
     .select('id, proposed_date, from_time, until_time, notes, groups(name)')
     .in('group_id', groupIds)
     .eq('status', 'confirmed')
+    .in('id', acceptedEventIds)
     .gte('proposed_date', today)
     .order('proposed_date')
 
