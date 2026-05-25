@@ -32,10 +32,17 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const days = allDays.filter(d => d >= todayStr)
 
-  // Confirmed Events pro Tag (dieser Gruppe)
-  const confirmedDates = new Set(
-    events.filter((e: any) => e.status === 'confirmed').map((e: any) => e.proposed_date)
-  )
+  // Confirmed Events pro Tag (dieser Gruppe) – nur für Mitglieder die zugesagt haben
+  const confirmedByMember = new Map<string, Set<string>>()
+  for (const event of events) {
+    if (event.status !== 'confirmed') continue
+    for (const r of (event.event_responses ?? [])) {
+      if (r.response === 'accepted') {
+        if (!confirmedByMember.has(r.user_id)) confirmedByMember.set(r.user_id, new Set())
+        confirmedByMember.get(r.user_id)!.add(event.proposed_date)
+      }
+    }
+  }
 
   // Blockierte Tage in anderen Gruppen (nur aktueller User)
   const blockedDateSet = new Set(blockedDates ?? [])
@@ -91,7 +98,7 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
               <div key={member.user_id} className="flex items-center mb-1 h-7">
                 {days.map((d) => {
                   const avail = dayMap.get(d)
-                  const isConfirmed = confirmedDates.has(d)
+                  const isConfirmed = confirmedByMember.get(member.user_id)?.has(d) ?? false
                   const isBlockedOtherGroup = !isConfirmed && member.user_id === currentUserId && blockedDateSet.has(d)
 
                   return (

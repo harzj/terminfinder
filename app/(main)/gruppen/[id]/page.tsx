@@ -90,26 +90,26 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
 
   let blockedDates: string[] = []
   if (otherGroupIds.length > 0) {
-    // Nur Events berücksichtigen, bei denen der Nutzer selbst zugesagt hat
-    const { data: acceptedResponses } = await supabase
+    // Bestätigte Events in anderen Gruppen, bei denen der Nutzer zugesagt hat
+    // Startpunkt: event_responses (eigene Antworten), join auf events
+    const { data: acceptedInOtherGroups } = await supabase
       .from('event_responses')
-      .select('event_id')
+      .select('event_id, events!inner(id, proposed_date, group_id, status)')
       .eq('user_id', user.id)
       .eq('response', 'accepted')
 
-    const acceptedEventIds = (acceptedResponses ?? []).map((r: any) => r.event_id as string)
-
-    if (acceptedEventIds.length > 0) {
-      const { data: otherEvents } = await supabase
-        .from('events')
-        .select('proposed_date')
-        .in('group_id', otherGroupIds)
-        .eq('status', 'confirmed')
-        .in('id', acceptedEventIds)
-        .gte('proposed_date', todayStr)
-        .lte('proposed_date', endStr)
-      blockedDates = (otherEvents ?? []).map((e: any) => e.proposed_date as string)
-    }
+    blockedDates = (acceptedInOtherGroups ?? [])
+      .filter((r: any) => {
+        const e = r.events
+        return (
+          e &&
+          e.status === 'confirmed' &&
+          otherGroupIds.includes(e.group_id) &&
+          e.proposed_date >= todayStr &&
+          e.proposed_date <= endStr
+        )
+      })
+      .map((r: any) => r.events.proposed_date as string)
   }
 
   // Vergangene bestätigte Termine (Archiv)

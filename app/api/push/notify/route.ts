@@ -112,8 +112,8 @@ async function sendPushToUsers(userIds: string[], notificationKey: string, ctx?:
         },
         payload
       ).catch((err) => {
-        // HTTP 410 = Subscription abgelaufen, entfernen
-        if (err?.statusCode === 410) {
+        // HTTP 410 = Subscription abgelaufen, HTTP 401/403 = VAPID-Key ungültig → entfernen
+        if (err?.statusCode === 410 || err?.statusCode === 401 || err?.statusCode === 403) {
           admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
         }
       })
