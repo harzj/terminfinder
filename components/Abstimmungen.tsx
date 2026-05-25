@@ -183,6 +183,9 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
       { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() },
       { onConflict: 'event_id,user_id' }
     )
+    // Push-Benachrichtigungen feuern (fire-and-forget)
+    fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId, type: 'vote_success_check' }) })
+    fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId, type: 'change_check' }) })
     setLoading(null)
     router.refresh()
   }
@@ -214,6 +217,10 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
       )
     }
 
+    // Push-Benachrichtigung: neue Abstimmung (fire-and-forget)
+    if (event) {
+      fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id, type: 'new_vote' }) })
+    }
     setCreating(false)
     setDialogOpen(false)
     setSelectedGames([])
@@ -226,6 +233,8 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     if (!deleteTarget) return
     setLoading(deleteTarget.id)
     const supabase = createClient()
+    // Erst benachrichtigen (Event muss noch existieren), dann löschen
+    await fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: deleteTarget.id, type: 'vote_deleted' }) })
     await supabase.from('events').delete().eq('id', deleteTarget.id)
     setLoading(null)
     setDeleteTarget(null)

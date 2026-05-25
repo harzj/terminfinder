@@ -1,14 +1,17 @@
 
 import Link from 'next/link'
 import { legalContact, legalMeta } from '@/lib/legal'
-import { getUser } from '@/lib/supabase/getUserClient'
+import { createClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata = {
   title: 'Impressum | Terminfinder',
 }
 
 export default async function ImpressumPage() {
-  const user = await getUser()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
   const isLoggedIn = !!user
 
   return (

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell } from 'lucide-react'
 import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
@@ -81,6 +81,37 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [importInitialUrl, setImportInitialUrl] = useState<string | null>(null)
   const [autoLoadImportUrl, setAutoLoadImportUrl] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'done' | 'denied'>('idle')
+
+  const handleEnableNotifications = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    setNotifStatus('requesting')
+    const registration = await navigator.serviceWorker.ready
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') {
+      setNotifStatus('denied')
+      return
+    }
+    try {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+      const padding = '='.repeat((4 - (vapidKey.length % 4)) % 4)
+      const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/')
+      const rawData = atob(base64)
+      const applicationServerKey = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; i++) { applicationServerKey[i] = rawData.charCodeAt(i) }
+      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey.buffer as ArrayBuffer })
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(subscription.toJSON()),
+      })
+      setNotifStatus('done')
+      setTimeout(() => setNotifStatus('idle'), 3000)
+    } catch {
+      setNotifStatus('idle')
+    }
+  }
 
   const handleSaveProfile = async () => {
     if (!displayName.trim() || savingProfile) return
@@ -510,6 +541,27 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
           </div>
         </CardContent>
       </Card>
+
+      {/* Benachrichtigungen */}
+      <Button
+        variant="outline"
+        className="w-full"
+        onClick={handleEnableNotifications}
+        disabled={notifStatus === 'requesting'}
+      >
+        {notifStatus === 'requesting' ? (
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        ) : notifStatus === 'done' ? (
+          <Check className="h-4 w-4 mr-2" />
+        ) : (
+          <Bell className="h-4 w-4 mr-2" />
+        )}
+        {notifStatus === 'done'
+          ? 'Benachrichtigungen aktiviert'
+          : notifStatus === 'denied'
+          ? 'Benachrichtigungen blockiert (Browser-Einstellungen)'
+          : 'Benachrichtigungen aktivieren'}
+      </Button>
 
       {/* Abmelden */}
       <Button variant="outline" className="w-full" onClick={handleLogout}>

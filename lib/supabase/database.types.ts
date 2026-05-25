@@ -255,6 +255,54 @@ export interface Database {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth_key: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth_key: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          endpoint?: string
+          p256dh?: string
+          auth_key?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      push_notifications_sent: {
+        Row: {
+          id: string
+          event_id: string
+          notification_type: string
+          sent_at: string
+        }
+        Insert: {
+          id?: string
+          event_id: string
+          notification_type: string
+          sent_at?: string
+        }
+        Update: {
+          id?: string
+          event_id?: string
+          notification_type?: string
+          sent_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

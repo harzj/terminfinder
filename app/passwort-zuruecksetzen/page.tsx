@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Link from "next/link";
 
-export default function PasswortZuruecksetzenPage() {
+function PasswortZuruecksetzenForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  useSearchParams(); // erforderlich für Suspense-Boundary
   const [password, setPassword] = useState("");
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,22 +77,11 @@ export default function PasswortZuruecksetzenPage() {
     </div>
   );
 }
-                        autoComplete="new-password"
-                      />
-                    </div>
-                    {error && <p className="text-sm text-destructive">{error}</p>}
-                    <Button type="submit" className="w-full" disabled={loading}>
-                      {loading ? "Speichere..." : "Passwort setzen"}
-                    </Button>
-                  </form>
-                )}
-                <div className="mt-4 text-center text-xs text-muted-foreground">
-                  <Link className="underline underline-offset-2" href="/anmelden">
-                    Zurück zur Anmeldung
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      }
+
+export default function PasswortZuruecksetzenPage() {
+  return (
+    <Suspense>
+      <PasswortZuruecksetzenForm />
+    </Suspense>
+  );
+}
