@@ -3,12 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 import webpush from "web-push";
 
-// VAPID-Konfiguration
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY!;
-const vapidSubject = process.env.VAPID_SUBJECT || "mailto:admin@terminfinder.de";
-
-webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+// VAPID wird erst beim ersten Request initialisiert (Env-Vars sind nur zur Laufzeit verfügbar)
+let vapidInitialized = false;
+function ensureVapid() {
+  if (vapidInitialized) return;
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || "mailto:admin@terminfinder.de",
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+  vapidInitialized = true;
+}
 
 // Admin-Client für Cross-User-Operationen (umgeht RLS)
 function getAdminClient() {
@@ -108,6 +113,7 @@ async function markSent(eventId: string, type: string) {
 }
 
 export async function POST(req: NextRequest) {
+  ensureVapid();
   // Caller muss eingeloggt sein
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
