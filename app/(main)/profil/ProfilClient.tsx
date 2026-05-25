@@ -82,34 +82,51 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [autoLoadImportUrl, setAutoLoadImportUrl] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'done' | 'denied'>('idle')
+  const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'done' | 'denied' | 'error'>('idle')
+  const [notifError, setNotifError] = useState<string | null>(null)
 
   const handleEnableNotifications = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
-    setNotifStatus('requesting')
-    const registration = await navigator.serviceWorker.ready
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') {
-      setNotifStatus('denied')
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setNotifError('Dein Browser unterstützt keine Push-Benachrichtigungen.')
+      setNotifStatus('error')
       return
     }
+    setNotifStatus('requesting')
+    setNotifError(null)
     try {
+      // 1. Permission zuerst – zeigt den Browser-Dialog sofort
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        setNotifStatus('denied')
+        return
+      }
+      // 2. SW registrieren und auf Aktivierung warten
+      await navigator.serviceWorker.register('/service-worker.js')
+      const registration = await navigator.serviceWorker.ready
+      // 3. Bestehende Subscription verwenden oder neue anlegen
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
       const padding = '='.repeat((4 - (vapidKey.length % 4)) % 4)
       const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/')
       const rawData = atob(base64)
       const applicationServerKey = new Uint8Array(rawData.length)
       for (let i = 0; i < rawData.length; i++) { applicationServerKey[i] = rawData.charCodeAt(i) }
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: applicationServerKey.buffer as ArrayBuffer })
-      await fetch('/api/push/subscribe', {
+      const existing = await registration.pushManager.getSubscription()
+      const subscription = existing ?? await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+      })
+      const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subscription.toJSON()),
       })
+      if (!res.ok) throw new Error(`Server: ${res.status}`)
       setNotifStatus('done')
       setTimeout(() => setNotifStatus('idle'), 3000)
-    } catch {
-      setNotifStatus('idle')
+    } catch (err) {
+      console.error('Push-Subscription fehlgeschlagen:', err)
+      setNotifError(err instanceof Error ? err.message : 'Unbekannter Fehler')
+      setNotifStatus('error')
     }
   }
 
@@ -559,9 +576,14 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         {notifStatus === 'done'
           ? 'Benachrichtigungen aktiviert'
           : notifStatus === 'denied'
-          ? 'Benachrichtigungen blockiert (Browser-Einstellungen)'
+          ? 'Benachrichtigungen blockiert – in Browser-Einstellungen erlauben'
+          : notifStatus === 'error'
+          ? 'Fehler – erneut versuchen'
           : 'Benachrichtigungen aktivieren'}
       </Button>
+      {(notifStatus === 'error' || notifStatus === 'denied') && notifError && (
+        <p className="text-xs text-destructive -mt-2">{notifError}</p>
+      )}
 
       {/* Abmelden */}
       <Button variant="outline" className="w-full" onClick={handleLogout}>
