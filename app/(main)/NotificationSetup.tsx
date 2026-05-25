@@ -2,8 +2,6 @@
 
 import { useEffect } from "react";
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
-
 /** Konvertiert einen Base64-URL-String in ein Uint8Array (für applicationServerKey) */
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -16,11 +14,19 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+async function getVapidKey(): Promise<string> {
+  const res = await fetch("/api/push/vapid-key");
+  if (!res.ok) throw new Error("VAPID key nicht verfügbar");
+  const { key } = await res.json();
+  return key;
+}
+
 async function subscribeToPush(registration: ServiceWorkerRegistration) {
   try {
+    const vapidKey = await getVapidKey();
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
     });
     await fetch("/api/push/subscribe", {
       method: "POST",

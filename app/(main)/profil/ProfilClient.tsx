@@ -103,8 +103,10 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       // 2. SW registrieren und auf Aktivierung warten
       await navigator.serviceWorker.register('/service-worker.js')
       const registration = await navigator.serviceWorker.ready
-      // 3. Bestehende Subscription verwenden oder neue anlegen
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!
+      // 3. Push-Subscription anlegen
+      const vapidRes = await fetch('/api/push/vapid-key')
+      if (!vapidRes.ok) throw new Error('VAPID key nicht verfügbar')
+      const { key: vapidKey } = await vapidRes.json()
       const padding = '='.repeat((4 - (vapidKey.length % 4)) % 4)
       const base64 = (vapidKey + padding).replace(/-/g, '+').replace(/_/g, '/')
       const rawData = atob(base64)

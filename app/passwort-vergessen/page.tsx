@@ -21,7 +21,7 @@ export default function PasswortVergessenPage() {
     setLoading(true);
     const supabase = createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/passwort-zuruecksetzen`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/passwort-zuruecksetzen`,
     });
     setLoading(false);
     if (error) {

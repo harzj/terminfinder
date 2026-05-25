@@ -1,7 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/anmelden', '/registrieren', '/auth/callback', '/passwort-vergessen', '/passwort-zuruecksetzen']
+// Nur für eingeloggte Nutzer gesperrte Routen (z.B. Login/Registrieren)
+const GUEST_ONLY_ROUTES = ['/anmelden', '/registrieren']
+// Immer öffentlich zugänglich, unabhängig vom Login-Status
+const ALWAYS_PUBLIC_ROUTES = ['/auth/callback', '/passwort-vergessen', '/passwort-zuruecksetzen']
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -46,8 +49,13 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse
   }
 
-  // Öffentliche Routen – eingeloggte Nutzer zur Startseite weiterleiten
-  if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
+  // Immer öffentlich – kein Redirect (z.B. Passwort-Reset nach Code-Tausch)
+  if (ALWAYS_PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
+    return supabaseResponse
+  }
+
+  // Login/Registrieren – eingeloggte Nutzer zur Startseite weiterleiten
+  if (GUEST_ONLY_ROUTES.some((r) => pathname.startsWith(r))) {
     if (user) {
       return NextResponse.redirect(new URL('/verfuegbarkeit', request.url))
     }
