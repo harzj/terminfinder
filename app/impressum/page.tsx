@@ -1,11 +1,16 @@
+
 import Link from 'next/link'
 import { legalContact, legalMeta } from '@/lib/legal'
+import { getUser } from '@/lib/supabase/getUserClient'
 
 export const metadata = {
   title: 'Impressum | Terminfinder',
 }
 
-export default function ImpressumPage() {
+export default async function ImpressumPage() {
+  const user = await getUser()
+  const isLoggedIn = !!user
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Impressum</h1>
@@ -13,9 +18,13 @@ export default function ImpressumPage() {
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">Angaben gemäß § 5 TMG</h2>
         <p>{legalContact.operatorName}</p>
-        <p>{legalContact.street}</p>
-        <p>{legalContact.postalCode} {legalContact.city}</p>
-        <p>{legalContact.country}</p>
+        {isLoggedIn ? (
+          <>
+            <p>{legalContact.street}</p>
+            <p>{legalContact.postalCode} {legalContact.city}</p>
+            <p>{legalContact.country}</p>
+          </>
+        ) : null}
       </section>
 
       <section className="space-y-2 text-sm">
@@ -31,7 +40,9 @@ export default function ImpressumPage() {
       <section className="space-y-2 text-sm">
         <h2 className="text-base font-semibold">Verantwortlich für den Inhalt</h2>
         <p>{legalContact.operatorName}</p>
-        <p>{legalContact.street}, {legalContact.postalCode} {legalContact.city}</p>
+        {isLoggedIn ? (
+          <p>{legalContact.street}, {legalContact.postalCode} {legalContact.city}</p>
+        ) : null}
       </section>
 
       <section className="space-y-2 text-sm text-muted-foreground">

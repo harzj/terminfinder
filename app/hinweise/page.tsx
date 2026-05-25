@@ -44,7 +44,6 @@ export default function HinweisePage() {
 
       <section className="space-y-2 text-sm text-muted-foreground">
         <p>Stand: {legalMeta.lastUpdated}</p>
-        <p>Hinweis: Dies ist ein allgemeiner Mustertext und keine Rechtsberatung.</p>
       </section>
 
       <div className="pt-2 text-sm space-x-4">

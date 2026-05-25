@@ -71,6 +71,9 @@ function AnmeldenForm() {
                 </Button>
               </form>
               <p className="text-center text-sm text-muted-foreground mt-4">
+                <Link href="/passwort-vergessen" className="underline underline-offset-4 mr-2">
+                  Passwort vergessen?
+                </Link>
                 Noch kein Konto?{' '}
                 <Link href={invite ? '/registrieren?invite=' + invite : '/registrieren'} className="underline underline-offset-4">
                   Registrieren
