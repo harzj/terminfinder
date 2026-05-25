@@ -55,6 +55,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; label: string } | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [newDate, setNewDate] = useState('')
   const [newFrom, setNewFrom] = useState('')
@@ -217,15 +218,27 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
       )
     }
 
-    // Push-Benachrichtigung: neue Abstimmung (fire-and-forget)
+    // Push-Benachrichtigung: neue Abstimmung (vor router.refresh, damit der Request nicht abgebrochen wird)
     if (event) {
-      fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id, type: 'new_vote' }) })
+      await fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id, type: 'new_vote' }) })
     }
     setCreating(false)
     setDialogOpen(false)
     setSelectedGames([])
     setGameSearch('')
     setNewNote('')
+    router.refresh()
+  }
+
+  const handleSoftCancel = async () => {
+    if (!cancelTarget) return
+    setLoading(cancelTarget.id)
+    const supabase = createClient()
+    // Push-Benachrichtigung (Event muss noch 'confirmed' sein für checkDedup)
+    await fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: cancelTarget.id, type: 'event_cancelled' }) })
+    await supabase.from('events').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', cancelTarget.id)
+    setLoading(null)
+    setCancelTarget(null)
     router.refresh()
   }
 
@@ -243,9 +256,12 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
 
   const votingEvents = events.filter((e: any) => e.status === 'voting')
   const confirmedEvents = events.filter((e: any) => e.status === 'confirmed')
-  const allEvents = [...confirmedEvents, ...votingEvents].sort((a: any, b: any) =>
-    a.proposed_date < b.proposed_date ? -1 : 1
-  )
+  const cancelledEvents = events.filter((e: any) => e.status === 'cancelled')
+  const allEvents = [
+    ...confirmedEvents.sort((a: any, b: any) => a.proposed_date < b.proposed_date ? -1 : 1),
+    ...votingEvents.sort((a: any, b: any) => a.proposed_date < b.proposed_date ? -1 : 1),
+    ...cancelledEvents.sort((a: any, b: any) => a.proposed_date < b.proposed_date ? -1 : 1),
+  ]
 
   return (
     <div className="space-y-4">
@@ -413,19 +429,23 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         )
         const hasChangedAccepted = event.status === 'confirmed' && changedParticipants.length > 0
         const canDelete = event.status === 'voting' && event.proposed_by === currentUserId
+        const isCancelled = event.status === 'cancelled'
+        const canSoftDelete = event.status === 'confirmed' && event.proposed_by === currentUserId && hasChangedAccepted
 
-        const borderClass = event.status === 'confirmed'
-          ? (hasChangedAccepted
-            ? (isThresholdMet ? 'border-amber-500 border-2' : 'border-red-500 border-2')
-            : 'border-green-500 border-2')
-          : (isThresholdMet
-            ? 'border-green-500 border-2'
-            : canStillSucceed
-              ? 'border-border'
-              : 'border-red-500 border-2')
+        const borderClass = isCancelled
+          ? 'border-border'
+          : event.status === 'confirmed'
+            ? (hasChangedAccepted
+              ? (isThresholdMet ? 'border-amber-500 border-2' : 'border-red-500 border-2')
+              : 'border-green-500 border-2')
+            : (isThresholdMet
+              ? 'border-green-500 border-2'
+              : canStillSucceed
+                ? 'border-border'
+                : 'border-red-500 border-2')
 
         return (
-          <Card key={event.id} className={cn(borderClass)}>
+          <Card key={event.id} className={cn(borderClass, isCancelled && 'opacity-60 bg-muted/30')}>
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -451,12 +471,25 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                     </span>
                     <span className="text-xs text-muted-foreground">/{event.min_participants} nötig</span>
                   </div>
+                  {isCancelled && (
+                    <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground">Abgesagt</Badge>
+                  )}
                   {canDelete && (
                     <button
                       type="button"
                       onClick={() => setDeleteTarget({ id: event.id, label: format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de }) })}
                       className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                       aria-label="Abstimmung löschen"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canSoftDelete && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelTarget({ id: event.id, label: format(parseISO(event.proposed_date), 'EEEE, d. MMMM', { locale: de }) })}
+                      className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                      aria-label="Termin absagen"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -535,8 +568,8 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                 ))}
               </div>
 
-              {/* Eigene Antwort-Buttons */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Eigene Antwort-Buttons (nicht bei abgesagten Terminen) */}
+              {!isCancelled && <div className="grid grid-cols-3 gap-2">
                 {(['accepted', 'uncertain', 'declined'] as const).map((resp) => {
                   const { label, icon: Icon, color } = RESPONSE_LABELS[resp]
                   const isActive = myResponse?.response === resp
@@ -565,6 +598,27 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
           </Card>
         )
       })}
+
+      <Dialog open={cancelTarget !== null} onOpenChange={(open) => { if (!open) setCancelTarget(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Termin absagen?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Der bestätigte Termin{cancelTarget ? ` vom ${cancelTarget.label}` : ''} wird als abgesagt markiert. Alle Mitglieder werden benachrichtigt. Der Termin bleibt bis zum Datum sichtbar (ausgegraut).
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCancelTarget(null)} disabled={loading !== null}>
+                Abbrechen
+              </Button>
+              <Button variant="default" className="bg-amber-600 hover:bg-amber-700" onClick={handleSoftCancel} disabled={loading !== null}>
+                Termin absagen
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <DialogContent className="max-w-sm">
