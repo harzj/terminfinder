@@ -197,9 +197,12 @@ export default function NaechsteTermine({ group, availabilities, members, startD
         }))
       )
     }
+    if (event) {
+      await fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: event.id, type: 'new_vote' }) })
+    }
     setCreating(false)
     closeDialog()
-    router.refresh()
+    router.push(`/gruppen/${group.id}?tab=abstimmungen`)
   }
 
   if (overlaps.length === 0) {
