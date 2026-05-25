@@ -50,12 +50,7 @@ async function setupNotifications() {
 
   const permission = Notification.permission;
 
-  if (permission === "default") {
-    const result = await Notification.requestPermission();
-    if (result === "granted") {
-      await subscribeToPush(registration);
-    }
-  } else if (permission === "granted") {
+  if (permission === "granted") {
     // Bereits erlaubt – Subscription sicherstellen (z.B. nach Browser-Neustart)
     const existing = await registration.pushManager.getSubscription();
     if (!existing) {

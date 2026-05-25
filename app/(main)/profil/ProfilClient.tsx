@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell, ChevronDown } from 'lucide-react'
 import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
@@ -64,12 +64,14 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [endeNextWorkday, setEndeNextWorkday] = useState(isNewFmt ? defaultTimes!.ende_next_workday : '22:00')
   const [endeNextFree, setEndeNextFree] = useState(isNewFmt ? defaultTimes!.ende_next_free : '23:30')
   const [timesEnabled, setTimesEnabled] = useState(defaultTimes !== null)
+  const [timesOpen, setTimesOpen] = useState(false)
   const [savingTimes, setSavingTimes] = useState(false)
   const [timesSaved, setTimesSaved] = useState(false)
 
   const [groupNames, setGroupNames] = useState<Record<string, string>>(
     Object.fromEntries(memberships.map((m) => [m.id, m.display_name ?? '']))
   )
+  const [groupNamesOpen, setGroupNamesOpen] = useState(false)
   const [savingGroup, setSavingGroup] = useState<string | null>(null)
   const [savedGroup, setSavedGroup] = useState<string | null>(null)
 
@@ -355,13 +357,20 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       {/* Per-Gruppen-Namen */}
       {memberships.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Name pro Gruppe</CardTitle>
+          <CardHeader
+            className="cursor-pointer select-none py-3"
+            onClick={() => setGroupNamesOpen((v) => !v)}
+          >
+            <CardTitle className="text-base flex items-center justify-between">
+              Name pro Gruppe
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${groupNamesOpen ? 'rotate-180' : ''}`} />
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Überschreibt deinen Anzeigenamen nur in dieser Gruppe. Leer lassen für globalen Namen.
-            </p>
+          {groupNamesOpen && (
+            <CardContent className="space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Überschreibt deinen Anzeigenamen nur in dieser Gruppe. Leer lassen für globalen Namen.
+              </p>
             {memberships.map((m) => (
               <div key={m.id} className="space-y-1.5">
                 <Label className="text-sm font-medium">{m.group_name}</Label>
@@ -389,15 +398,23 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
                 </div>
               </div>
             ))}
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
       )}
 
       {/* Standard-Uhrzeiten */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Standard-Uhrzeiten</CardTitle>
+        <CardHeader
+          className="cursor-pointer select-none py-3"
+          onClick={() => setTimesOpen((v) => !v)}
+        >
+          <CardTitle className="text-base flex items-center justify-between">
+            Standard-Uhrzeiten
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${timesOpen ? 'rotate-180' : ''}`} />
+          </CardTitle>
         </CardHeader>
+        {timesOpen && (
         <CardContent className="space-y-4">
           <p className="text-xs text-muted-foreground">
             Beim ersten Antippen eines Tages werden automatisch diese Zeiten eingetragen.
@@ -451,6 +468,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
             )}
           </Button>
         </CardContent>
+        )}
       </Card>
 
       {/* Kalender-Integration */}
