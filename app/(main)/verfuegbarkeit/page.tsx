@@ -8,6 +8,7 @@ import { CalendarCheck, AlertTriangle } from 'lucide-react'
 import VerfuegbarkeitClient from './VerfuegbarkeitClient'
 import LaufendeAbstimmungen from './LaufendeAbstimmungen'
 import { DefaultTimes } from '@/lib/holidays'
+import PushActivationButton from '../PushActivationButton'
 
 export default async function VerfuegbarkeitPage() {
   const supabase = await createClient()
@@ -105,6 +106,7 @@ export default async function VerfuegbarkeitPage() {
         <section>
           <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
             <CalendarCheck className="h-4 w-4 text-green-600" /> Nächste Termine
+            <PushActivationButton />
           </h2>
           <div className="space-y-2">
             {upcomingConfirmed.map((event: any) => {

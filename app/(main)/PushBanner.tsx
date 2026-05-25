@@ -29,7 +29,7 @@ async function subscribeToPush() {
   if (!saveRes.ok) throw new Error(`Server: ${saveRes.status}`)
 }
 
-const DISMISSED_KEY = 'tf_push_banner_dismissed'
+const DISMISSED_KEY = 'tf_push_banner_v2'
 
 export default function PushBanner() {
   const [visible, setVisible] = useState(false)
@@ -38,7 +38,6 @@ export default function PushBanner() {
 
   useEffect(() => {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return
-    if (Notification.permission !== 'default') return
     if (localStorage.getItem(DISMISSED_KEY) === '1') return
     setVisible(true)
   }, [])
