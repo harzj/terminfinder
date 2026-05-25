@@ -100,7 +100,7 @@ export default async function VerfuegbarkeitPage() {
   return (
     <div className="p-4 max-w-lg mx-auto space-y-6">
 
-      {/* ── Bevorstehende Termine ──────────────────── */}
+      {/* Bevorstehende Termine */}
       {upcomingConfirmed.length > 0 && (
         <section>
           <h2 className="text-base font-semibold mb-2 flex items-center gap-2">
@@ -170,7 +170,7 @@ export default async function VerfuegbarkeitPage() {
         </section>
       )}
 
-      {/* ── Laufende Abstimmungen ──────────────────── */}
+      {/* Laufende Abstimmungen */}
       {activeVotings.length > 0 && (
         <LaufendeAbstimmungen
           events={activeVotings}
@@ -179,7 +179,7 @@ export default async function VerfuegbarkeitPage() {
         />
       )}
 
-      {/* ── Verfügbarkeitskalender ─────────────────── */}
+      {/* Verfügbarkeitskalender */}
       <section>
         <VerfuegbarkeitClient
           userId={user.id}
