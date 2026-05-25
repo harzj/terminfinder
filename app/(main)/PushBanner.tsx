@@ -53,6 +53,7 @@ export default function PushBanner() {
       const permission = await Notification.requestPermission()
       if (permission === 'granted') {
         await subscribeToPush()
+        localStorage.setItem(DISMISSED_KEY, '1')
         setDone(true)
         setTimeout(() => setVisible(false), 2500)
       } else {
