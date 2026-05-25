@@ -28,6 +28,10 @@ function AnmeldenForm() {
       setLoading(false)
       return
     }
+    // Setze Flag für Notification-Permission
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('tf_logged_in', '1')
+    }
     const invite = searchParams.get('invite')
     if (invite) {
       router.push(`/einladen/${invite}`)

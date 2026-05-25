@@ -113,6 +113,9 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const handleLogout = async () => {
     const supabase = createClient()
     await supabase.auth.signOut()
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('tf_logged_in')
+    }
     router.push('/anmelden')
   }
 
