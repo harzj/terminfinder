@@ -28,7 +28,7 @@ interface Props {
 type Tab = 'file' | 'url'
 type DayState = 'green' | 'yellow' | 'red' | 'violet' | 'dark_green' | 'orange' | 'skip'
 type FilterMode = 'alle' | 'alles' | 'nichts'
-type OverlapType = 'none' | 'front' | 'back' | 'full'
+type OverlapType = 'none' | 'front' | 'back' | 'full' | 'close'
 
 interface PreviewDay {
   date: string
@@ -81,7 +81,12 @@ function detectOverlap(event: BusyEvent, defStart: string, defEnd: string): {
     return { type: 'full', adjustedStart: null, adjustedEnd: null }
   const evS = toMin(event.startTime), evE = toMin(event.endTime)
   const defS = toMin(defStart), defE = toMin(defEnd)
-  if (evE <= defS || evS >= defE)         return { type: 'none', adjustedStart: null, adjustedEnd: null }
+  if (evS >= defE)                        return { type: 'none', adjustedStart: null, adjustedEnd: null }
+  if (evE <= defS) {
+    // Event ends before window – within 1 h → Case C (busy)
+    if (defS - evE < 60)                  return { type: 'close', adjustedStart: fromMin(evE + 60), adjustedEnd: null }
+    return { type: 'none', adjustedStart: null, adjustedEnd: null }
+  }
   if (evS <= defS && evE >= defE)         return { type: 'full', adjustedStart: null, adjustedEnd: null }
   if (evS >= defS && evE <= defE)         return { type: 'full', adjustedStart: null, adjustedEnd: null } // inside window
   if (evS < defS)                         return { type: 'front', adjustedStart: fromMin(evE + 60), adjustedEnd: null }
@@ -96,6 +101,7 @@ function aggregateOverlap(events: BusyEvent[], defStart: string, defEnd: string)
   const frontCandidates: number[] = []
   const backCandidates: number[] = []
   let hasPartial = false
+  let hasActualFront = false
 
   for (const event of events) {
     const ol = detectOverlap(event, defStart, defEnd)
@@ -103,6 +109,11 @@ function aggregateOverlap(events: BusyEvent[], defStart: string, defEnd: string)
       return { type: 'full', adjustedStart: null, adjustedEnd: null }
     }
     if (ol.type === 'front') {
+      hasPartial = true
+      hasActualFront = true
+      if (ol.adjustedStart) frontCandidates.push(toMin(ol.adjustedStart))
+    }
+    if (ol.type === 'close') {
       hasPartial = true
       if (ol.adjustedStart) frontCandidates.push(toMin(ol.adjustedStart))
     }
@@ -120,6 +131,10 @@ function aggregateOverlap(events: BusyEvent[], defStart: string, defEnd: string)
   }
 
   if (hasPartial) {
+    // Only 'close' events (no actual front overlap, no back) → keep as 'close'
+    if (!hasActualFront && backCandidates.length === 0) {
+      return { type: 'close', adjustedStart, adjustedEnd }
+    }
     return { type: 'front', adjustedStart, adjustedEnd }
   }
 
@@ -130,6 +145,7 @@ function initialState(hasBusyEvent: boolean, overlap: OverlapType): DayState {
   if (!hasBusyEvent) return 'green'
   if (overlap === 'full') return 'red'
   if (overlap === 'none') return 'yellow'
+  if (overlap === 'close') return 'red'  // Case C: close to start → busy
   return 'violet'
 }
 
@@ -141,6 +157,11 @@ function cycleState(cur: DayState, hasIcsEvent: boolean, overlap: OverlapType): 
   }
   if (overlap === 'front' || overlap === 'back') {
     const c: DayState[] = ['violet', 'dark_green', 'orange', 'skip']
+    const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 4]
+  }
+  if (overlap === 'close') {
+    // Case C: close to start → red (busy) → dark_green (available after) → orange → skip
+    const c: DayState[] = ['red', 'dark_green', 'orange', 'skip']
     const i = c.indexOf(cur); return c[i === -1 ? 1 : (i + 1) % 4]
   }
   if (overlap === 'full') {
@@ -211,10 +232,8 @@ export default function CalendarImport({
       const icsEvents = eventsByDate.get(dateStr) ?? []
       const hasIcsEvent = icsEvents.length > 0
       const hadEntry = existingAvailability.some(a => a.date === dateStr)
-      // Skip matches: ICS free + app has entry (both available), or ICS busy + no entry (both unavailable)
-      if (!hasIcsEvent && hadEntry) continue
-      if (hasIcsEvent && !hadEntry) continue
 
+      // Compute overlap FIRST so skip logic can use it
       const defTimes = defaultTimes ? getTimesForDate(day, defaultTimes) : null
       let overlapType: OverlapType = 'none'
       let adjustedStart: string | null = null, adjustedEnd: string | null = null
@@ -225,6 +244,13 @@ export default function CalendarImport({
       } else if (hasIcsEvent) {
         overlapType = icsEvents.some(e => e.allDay) ? 'full' : 'none'
       }
+
+      // Skip days where ICS and app state agree – no review needed
+      // ICS free + has existing entry → both available → skip
+      if (!hasIcsEvent && hadEntry) continue
+      // ICS busy + no existing entry + fully blocked → both unavailable → skip
+      // (non-full overlaps: 'none'/'close'/'front'/'back' must still be shown)
+      if (hasIcsEvent && !hadEntry && overlapType === 'full') continue
 
       const base = initialState(hasIcsEvent, overlapType)
       result.push({

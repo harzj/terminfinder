@@ -42,17 +42,18 @@ export default async function VerfuegbarkeitPage() {
     .order('date')
 
   // Bestätigte Events holen (für Sperr-Anzeige im Kalender)
+  // status mitselecten, damit gecancelte Events nicht als Sperre erscheinen
   const { data: confirmedEvents } = await supabase
     .from('event_responses')
-    .select('events(id, group_id, proposed_date, groups(name))')
+    .select('events(id, group_id, proposed_date, groups(name), status)')
     .eq('user_id', user.id)
     .eq('response', 'accepted')
 
-  const calendarEvents = (confirmedEvents ?? []).flatMap((er: any) =>
-    er.events
-      ? [{ date: er.events.proposed_date, group_name: er.events.groups?.name ?? '' }]
-      : []
-  )
+  const calendarEvents = (confirmedEvents ?? []).flatMap((er: any) => {
+    const e = er.events
+    if (!e || e.status !== 'confirmed') return []
+    return [{ date: e.proposed_date, group_name: e.groups?.name ?? '' }]
+  })
 
   // Standard-Uhrzeiten aus Profil
   const { data: profileData } = await supabase
