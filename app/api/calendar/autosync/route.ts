@@ -71,7 +71,7 @@ function computeSyncAction(
       // Event starts after window ends
       const gap = evS - defE   // minutes
       if (gap <= minDistanceMinutes) {
-        if (result !== 'set_busy') result = 'set_uncertain'
+        result = 'set_uncertain'
       }
       // else: no impact
     }
