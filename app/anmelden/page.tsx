@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -46,9 +47,12 @@ function AnmeldenForm() {
     <div className="min-h-screen bg-muted/40 px-4 py-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-5">
         <div className="w-full">
-          <img
+          <Image
             src="/logo_neu.png"
             alt="Lass-Treffen"
+            width={1254}
+            height={1254}
+            priority
             className="mx-auto h-auto w-full max-w-5xl object-contain max-h-[30vh]"
           />
         </div>
