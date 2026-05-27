@@ -92,8 +92,8 @@ export default function DatenschutzPage() {
           Alle Verbindungen sind TLS-verschlüsselt. Daten in der Datenbank werden durch
           Verschlüsselung auf Infrastrukturebene (AES-256) geschützt. Der Zugriff auf eigene Daten
           wird durch Row-Level-Security auf Datenbankebene durchgesetzt.
-          ICS-Kalender-URLs werden im Klartext gespeichert — wir empfehlen, nur URLs zu hinterlegen,
-          die du bei Bedarf in deinem Kalender-Anbieter widerrufen kannst.
+          ICS-Kalender-URLs werden zusätzlich mit AES-256-GCM auf Anwendungsebene verschlüsselt,
+          bevor sie in der Datenbank gespeichert werden.
         </p>
       </section>
 

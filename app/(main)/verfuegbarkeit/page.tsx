@@ -8,6 +8,7 @@ import { CalendarCheck, AlertTriangle } from 'lucide-react'
 import VerfuegbarkeitClient from './VerfuegbarkeitClient'
 import LaufendeAbstimmungen from './LaufendeAbstimmungen'
 import { DefaultTimes } from '@/lib/holidays'
+import { decryptUrl } from '@/lib/encryption'
 import PushActivationButton from '../PushActivationButton'
 
 export default async function VerfuegbarkeitPage() {
@@ -62,7 +63,9 @@ export default async function VerfuegbarkeitPage() {
     .eq('id', user.id)
     .single()
   const defaultTimes = (profileData?.default_availability_times as DefaultTimes | null) ?? null
-  const calendarImportUrl = profileData?.calendar_import_url ?? null
+  const calendarImportUrl = profileData?.calendar_import_url
+    ? decryptUrl(profileData.calendar_import_url)
+    : null
 
   // Gruppen des Nutzers ermitteln
   const { data: memberships } = await supabase

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import ProfilClient from './ProfilClient'
 import { DefaultTimes } from '@/lib/holidays'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
+import { decryptUrl } from '@/lib/encryption'
 
 export default async function ProfilPage() {
   const supabase = await createClient()
@@ -62,12 +63,12 @@ export default async function ProfilPage() {
       bggCollectionCount={Array.isArray(profile?.bgg_collection) ? (profile.bgg_collection as unknown[]).length : 0}
       defaultTimes={(profile?.default_availability_times as DefaultTimes | null) ?? null}
       calendarToken={profile?.calendar_token ?? ''}
-      calendarImportUrl={profile?.calendar_import_url ?? null}
+      calendarImportUrl={profile?.calendar_import_url ? decryptUrl(profile.calendar_import_url) : null}
       startDate={weekStartStr}
       todayStr={todayStr}
       initialAvailability={(availabilityData ?? []) as DayAvailability[]}
       autoSyncEnabled={profile?.auto_sync_enabled ?? false}
-      autoSyncUrls={(profile?.auto_sync_urls as string[] | null) ?? []}
+      autoSyncUrls={((profile?.auto_sync_urls as string[] | null) ?? []).map(decryptUrl)}
       autoSyncMinDistance={profile?.auto_sync_min_distance_hours ?? 3}
     />
   )

@@ -174,15 +174,15 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
 
   const handleSaveAutoSync = async () => {
     setSavingAutoSync(true)
-    const supabase = createClient()
-    await supabase
-      .from('profiles')
-      .update({
+    await fetch('/api/profile/calendar-urls', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         auto_sync_enabled: autoSyncEnabled,
         auto_sync_urls: autoSyncEnabled ? autoSyncEnabledUrls : [],
         auto_sync_min_distance_hours: autoSyncMinDistance,
-      })
-      .eq('id', profile.id)
+      }),
+    })
     setSavingAutoSync(false)
     setAutoSyncSaved(true)
     setTimeout(() => setAutoSyncSaved(false), 2000)
@@ -281,11 +281,11 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
 
   const handleSaveImportUrl = async () => {
     setSavingImportUrl(true)
-    const supabase = createClient()
-    await supabase
-      .from('profiles')
-      .update({ calendar_import_url: serializeImportUrls(importUrls) })
-      .eq('id', profile.id)
+    await fetch('/api/profile/calendar-urls', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ calendar_import_url: serializeImportUrls(importUrls) }),
+    })
     setSavingImportUrl(false)
     setImportUrlSaved(true)
     setTimeout(() => setImportUrlSaved(false), 2000)

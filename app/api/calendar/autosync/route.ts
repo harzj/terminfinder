@@ -3,6 +3,7 @@ import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 import { parseICSEvents, BusyEvent } from '@/lib/ics'
 import { getTimesForDate, DefaultTimes } from '@/lib/holidays'
 import { addDays, format, parseISO } from 'date-fns'
+import { decryptUrl } from '@/lib/encryption'
 
 // ── Admin client (umgeht RLS für Cross-User-Batch) ─────────────────────────
 function getAdminClient() {
@@ -260,7 +261,6 @@ async function runAutoSyncForUser(
         date: dateStr,
         action,
         ics_event_summary: firstEvent?.summary,
-        calendar_url: autoSyncUrls[0], // simplified: just first URL
       })
     }
   }
@@ -315,7 +315,7 @@ export async function GET(req: NextRequest) {
   const results: Record<string, { changed: number; skipped: number }> = {}
 
   for (const profile of profiles ?? []) {
-    const urls = (profile.auto_sync_urls as string[] | null) ?? []
+    const urls = ((profile.auto_sync_urls as string[] | null) ?? []).map(u => decryptUrl(u as string)).filter(Boolean)
     const minDistance = profile.auto_sync_min_distance_hours ?? 3
     const defaultTimes = (profile.default_availability_times as DefaultTimes | null) ?? null
 
