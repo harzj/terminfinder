@@ -328,5 +328,10 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  // Cleanup: delete sync log entries older than 90 days
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 90)
+  await admin.from('calendar_sync_log').delete().lt('synced_at', cutoff.toISOString())
+
   return NextResponse.json({ ok: true, results })
 }

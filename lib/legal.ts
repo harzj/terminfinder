@@ -10,5 +10,5 @@ export const legalContact = {
 export const legalMeta = {
   appName: 'Terminfinder',
   appUrl: 'https://lass-treffen.de',
-  lastUpdated: '24.05.2026',
+  lastUpdated: '27.05.2026',
 }
