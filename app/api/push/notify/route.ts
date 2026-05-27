@@ -46,14 +46,14 @@ const NOTIFICATION_LABELS: Record<string, { title: string; body: string; url: st
     body: "Ein bestätigter Termin wurde vom Initiator abgesagt.",
     url: "/verfuegbarkeit",
   },
-  change_1: {
+  change_safe: {
     title: "Änderung bei bestätigtem Termin",
-    body: "Jemand hat seine Zusage bei einem bestätigten Termin zurückgezogen.",
+    body: "Jemand hat seine Verfügbarkeit geändert, bitte prüfe den Termin.",
     url: "/verfuegbarkeit",
   },
-  change_2: {
-    title: "Termin gefährdet",
-    body: "Die Mindestteilnehmerzahl wird nicht mehr erreicht.",
+  change_danger: {
+    title: "Termin in Gefahr",
+    body: "Jemand hat seine Verfügbarkeit geändert, der Termin ist in Gefahr. Bitte prüfen.",
     url: "/verfuegbarkeit",
   },
 };
@@ -212,33 +212,33 @@ export async function POST(req: NextRequest) {
   if (type === "change_check") {
     if (event.status !== "confirmed") return NextResponse.json({ ok: true, skipped: "not_confirmed" });
 
-    // Antworten laden
+    // Fall 1 wurde bereits gesendet → keine weiteren Änderungs-Benachrichtigungen
+    if (await checkDedup(eventId, "change_2")) return NextResponse.json({ ok: true, dedup: true });
+
     const { data: responses } = await admin
       .from("event_responses")
       .select("user_id, response, previous_response")
       .eq("event_id", eventId);
 
-    const results: string[] = [];
-
-    // Typ 4.1: Jemand wechselte von "accepted" zu etwas anderem
-    const hasChange1 = (responses ?? []).some(
+    const hasChange = (responses ?? []).some(
       (r) => r.previous_response === "accepted" && r.response !== "accepted"
     );
-    if (hasChange1 && !(await checkDedup(eventId, "change_1"))) {
-      await sendPushToUsers(userIds, "change_1", ctx);
-      await markSent(eventId, "change_1");
-      results.push("change_1");
-    }
+    if (!hasChange) return NextResponse.json({ ok: true, skipped: "no_change" });
 
-    // Typ 4.2: Anzahl Zusagen < Mindestteilnehmer
     const acceptedCount = (responses ?? []).filter((r) => r.response === "accepted").length;
-    if (acceptedCount < event.min_participants && !(await checkDedup(eventId, "change_2"))) {
-      await sendPushToUsers(userIds, "change_2", ctx);
+
+    // Fall 1: Mindestteilnehmerzahl unterschritten → kombinierte Gefahren-Meldung (einmalig, sperrt alle weiteren)
+    if (acceptedCount < event.min_participants) {
+      await sendPushToUsers(userIds, "change_danger", ctx);
       await markSent(eventId, "change_2");
-      results.push("change_2");
+      return NextResponse.json({ ok: true, sent: ["change_danger"] });
     }
 
-    return NextResponse.json({ ok: true, sent: results });
+    // Fall 2: Noch genug Teilnehmer → einmalige Hinweis-Meldung (Fall 1 kann danach noch folgen)
+    if (await checkDedup(eventId, "change_1")) return NextResponse.json({ ok: true, dedup: true });
+    await sendPushToUsers(userIds, "change_safe", ctx);
+    await markSent(eventId, "change_1");
+    return NextResponse.json({ ok: true, sent: ["change_safe"] });
   }
 
   return NextResponse.json({ error: "Unbekannter type" }, { status: 400 });
