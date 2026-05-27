@@ -49,6 +49,14 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
     })
   }
 
+  const markUserChanged = async (supabase: ReturnType<typeof createClient>, dates: string[]) => {
+    const now = new Date().toISOString()
+    await supabase.from('calendar_sync_state').upsert(
+      dates.map(date => ({ user_id: userId, date, user_changed_at: now })),
+      { onConflict: 'user_id,date' }
+    )
+  }
+
   const handleSave = async (day: DayAvailability) => {
     setSaveError(null)
     const supabase = createClient()
@@ -66,6 +74,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
         const next = prev.filter((a) => a.date !== day.date)
         return [...next, { date: data.date, status: data.status, from_time: data.from_time, until_time: data.until_time }]
       })
+      markUserChanged(supabase, [day.date])
     } else if (error) {
       setSaveError(`Speichern fehlgeschlagen: ${error.message} (Code: ${error.code})`)
     }
@@ -75,6 +84,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
     const supabase = createClient()
     await supabase.from('availability').delete().eq('user_id', userId).eq('date', date)
     setAvailability((prev) => prev.filter((a) => a.date !== date))
+    markUserChanged(supabase, [date])
   }
 
   const handleImport = async (days: DayAvailability[], toDelete: string[]) => {
@@ -92,6 +102,10 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
     if (toDelete.length > 0) {
       await supabase.from('availability').delete().eq('user_id', userId).in('date', toDelete)
     }
+
+    // Mark all changed dates as user-initiated (auto-sync won't override until ICS changes)
+    const allDates = [...days.map(d => d.date), ...toDelete]
+    if (allDates.length > 0) markUserChanged(supabase, allDates)
 
     // Refresh local state
     const { data: fresh } = await supabase

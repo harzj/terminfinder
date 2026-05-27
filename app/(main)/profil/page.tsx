@@ -11,7 +11,7 @@ export default async function ProfilPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, bgg_username, bgg_collection, default_availability_times, calendar_token, calendar_import_url')
+    .select('id, display_name, bgg_username, bgg_collection, default_availability_times, calendar_token, calendar_import_url, auto_sync_enabled, auto_sync_urls, auto_sync_min_distance_hours')
     .eq('id', user.id)
     .single()
 
@@ -66,6 +66,9 @@ export default async function ProfilPage() {
       startDate={weekStartStr}
       todayStr={todayStr}
       initialAvailability={(availabilityData ?? []) as DayAvailability[]}
+      autoSyncEnabled={profile?.auto_sync_enabled ?? false}
+      autoSyncUrls={(profile?.auto_sync_urls as string[] | null) ?? []}
+      autoSyncMinDistance={profile?.auto_sync_min_distance_hours ?? 3}
     />
   )
 }

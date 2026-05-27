@@ -19,6 +19,9 @@ export interface Database {
           created_at: string
           calendar_token: string
           calendar_import_url: string | null
+          auto_sync_enabled: boolean
+          auto_sync_urls: Json
+          auto_sync_min_distance_hours: number
         }
         Insert: {
           id: string
@@ -29,6 +32,9 @@ export interface Database {
           created_at?: string
           calendar_token?: string
           calendar_import_url?: string | null
+          auto_sync_enabled?: boolean
+          auto_sync_urls?: Json
+          auto_sync_min_distance_hours?: number
         }
         Update: {
           id?: string
@@ -39,6 +45,9 @@ export interface Database {
           created_at?: string
           calendar_token?: string
           calendar_import_url?: string | null
+          auto_sync_enabled?: boolean
+          auto_sync_urls?: Json
+          auto_sync_min_distance_hours?: number
         }
         Relationships: []
       }
@@ -303,6 +312,63 @@ export interface Database {
           event_id?: string
           notification_type?: string
           sent_at?: string
+        }
+        Relationships: []
+      }
+      calendar_sync_state: {
+        Row: {
+          user_id: string
+          date: string
+          ics_signature: string
+          last_action: string
+          last_sync_at: string
+          user_changed_at: string | null
+        }
+        Insert: {
+          user_id: string
+          date: string
+          ics_signature?: string
+          last_action?: string
+          last_sync_at?: string
+          user_changed_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          date?: string
+          ics_signature?: string
+          last_action?: string
+          last_sync_at?: string
+          user_changed_at?: string | null
+        }
+        Relationships: []
+      }
+      calendar_sync_log: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          action: string
+          ics_event_summary: string | null
+          calendar_url: string | null
+          synced_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date: string
+          action: string
+          ics_event_summary?: string | null
+          calendar_url?: string | null
+          synced_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          action?: string
+          ics_event_summary?: string | null
+          calendar_url?: string | null
+          synced_at?: string
         }
         Relationships: []
       }

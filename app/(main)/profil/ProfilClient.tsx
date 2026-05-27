@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell, BellOff, ChevronDown } from 'lucide-react'
+import { Check, Loader2, LogOut, RefreshCw, CalendarDays, Copy, Plus, Minus, Bell, BellOff, ChevronDown, RotateCcw } from 'lucide-react'
 import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
+import { Badge } from '@/components/ui/badge'
 
 function parseImportUrls(raw: string | null): string[] {
   const items = (raw ?? '')
@@ -43,9 +44,12 @@ interface Props {
   startDate: string
   todayStr: string
   initialAvailability: DayAvailability[]
+  autoSyncEnabled: boolean
+  autoSyncUrls: string[]
+  autoSyncMinDistance: number
 }
 
-export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl, startDate, todayStr, initialAvailability }: Props) {
+export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl, startDate, todayStr, initialAvailability, autoSyncEnabled: initialAutoSyncEnabled, autoSyncUrls: initialAutoSyncUrls, autoSyncMinDistance: initialAutoSyncMinDistance }: Props) {
   const router = useRouter()
 
   const [displayName, setDisplayName] = useState(profile.display_name)
@@ -87,6 +91,14 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [notifStatus, setNotifStatus] = useState<'idle' | 'requesting' | 'done' | 'denied' | 'error'>('idle')
   const [notifError, setNotifError] = useState<string | null>(null)
   const [disableStatus, setDisableStatus] = useState<'idle' | 'loading' | 'done'>('idle')
+
+  // Auto-Sync (Beta)
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(initialAutoSyncEnabled)
+  const [autoSyncEnabledUrls, setAutoSyncEnabledUrls] = useState<string[]>(initialAutoSyncUrls)
+  const [autoSyncMinDistance, setAutoSyncMinDistance] = useState(initialAutoSyncMinDistance)
+  const [autoSyncOptionsOpen, setAutoSyncOptionsOpen] = useState(false)
+  const [savingAutoSync, setSavingAutoSync] = useState(false)
+  const [autoSyncSaved, setAutoSyncSaved] = useState(false)
 
   const handleEnableNotifications = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -158,6 +170,29 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     } catch {
       setDisableStatus('idle')
     }
+  }
+
+  const handleSaveAutoSync = async () => {
+    setSavingAutoSync(true)
+    const supabase = createClient()
+    await supabase
+      .from('profiles')
+      .update({
+        auto_sync_enabled: autoSyncEnabled,
+        auto_sync_urls: autoSyncEnabled ? autoSyncEnabledUrls : [],
+        auto_sync_min_distance_hours: autoSyncMinDistance,
+      })
+      .eq('id', profile.id)
+    setSavingAutoSync(false)
+    setAutoSyncSaved(true)
+    setTimeout(() => setAutoSyncSaved(false), 2000)
+  }
+
+  const toggleAutoSyncUrl = (url: string) => {
+    setAutoSyncSaved(false)
+    setAutoSyncEnabledUrls((prev) =>
+      prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url]
+    )
   }
 
   const handleSaveProfile = async () => {
@@ -602,6 +637,101 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Auto-Sync (Beta) */}
+      <Card>
+        <CardHeader className="py-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Auto-Sync
+            <Badge variant="outline" className="text-xs px-1.5 py-0 border-amber-400 text-amber-600">Beta</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Synchronisiert deine Kalender stündlich automatisch mit deiner Verfügbarkeit.
+            Deine manuellen Änderungen werden nicht überschrieben.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="autoSyncEnabled"
+              checked={autoSyncEnabled}
+              onChange={(e) => { setAutoSyncEnabled(e.target.checked); setAutoSyncSaved(false) }}
+              className="h-4 w-4"
+            />
+            <Label htmlFor="autoSyncEnabled" className="cursor-pointer font-medium">Auto-Sync aktivieren</Label>
+          </div>
+
+          {autoSyncEnabled && (
+            <div className="space-y-4">
+              {importUrls.filter(u => u.trim()).length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Aktivierte Kalender:</p>
+                  {importUrls.filter(u => u.trim()).map((url) => {
+                    const short = url.replace(/^(webcal|https?):\/\//i, '').slice(0, 50)
+                    return (
+                      <div key={url} className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          id={`as-url-${url}`}
+                          checked={autoSyncEnabledUrls.includes(url)}
+                          onChange={() => toggleAutoSyncUrl(url)}
+                          className="h-4 w-4 mt-0.5 shrink-0"
+                        />
+                        <Label htmlFor={`as-url-${url}`} className="cursor-pointer text-xs break-all leading-snug">
+                          {short}{url.length > 50 ? '…' : ''}
+                        </Label>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Füge zuerst eine ICS-URL im Bereich „Kalender-Integration“ hinzu.
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setAutoSyncOptionsOpen((v) => !v)}
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${autoSyncOptionsOpen ? 'rotate-180' : ''}`} />
+                Einstellungen
+              </button>
+              {autoSyncOptionsOpen && (
+                <div className="space-y-2 pl-1">
+                  <div className="flex items-center gap-3">
+                    <Label htmlFor="autoSyncMinDist" className="text-sm whitespace-nowrap">Mindest-Abstand (Stunden)</Label>
+                    <input
+                      type="number"
+                      id="autoSyncMinDist"
+                      min={1}
+                      max={12}
+                      value={autoSyncMinDistance}
+                      onChange={(e) => { setAutoSyncMinDistance(Math.max(1, Math.min(12, Number(e.target.value)))); setAutoSyncSaved(false) }}
+                      className="w-16 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Termine, die weniger als diese Stunden vor/nach deiner Standardzeit enden/beginnen, werden auf „unklar“ gesetzt.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <Button onClick={handleSaveAutoSync} disabled={savingAutoSync} size="sm" className="w-full">
+            {savingAutoSync
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : autoSyncSaved
+                ? <><Check className="h-4 w-4 mr-1" />Gespeichert</>
+                : 'Speichern'
+            }
+          </Button>
         </CardContent>
       </Card>
 

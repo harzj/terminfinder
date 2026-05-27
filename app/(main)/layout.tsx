@@ -4,6 +4,7 @@ import BottomNav from '@/components/BottomNav'
 
 import NotificationSetup from './NotificationSetup'
 import PushBanner from './PushBanner'
+import AutoSyncBanner from './AutoSyncBanner'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,6 +25,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </header>
         <main className="flex-1 overflow-y-auto pb-20">
           <PushBanner />
+          <AutoSyncBanner />
           {children}
         </main>
         <footer className="pb-20 border-t border-border/60 bg-background/95">
