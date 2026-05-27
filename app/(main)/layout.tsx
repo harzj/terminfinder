@@ -14,7 +14,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <header className="shrink-0 border-b border-border bg-background">
           <div className="mx-auto w-full max-w-[560px]">
             <Image
-              src="/header.png"
+              src="/header_v2.png"
               alt="Terminfinder"
               width={1600}
               height={400}

@@ -48,7 +48,7 @@ function AnmeldenForm() {
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-5">
         <div className="w-full">
           <Image
-            src="/logo_neu.png"
+            src="/logo_v2.png"
             alt="Lass-Treffen"
             width={1254}
             height={1254}
