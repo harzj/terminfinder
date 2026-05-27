@@ -14,7 +14,12 @@ export async function PATCH(req: NextRequest) {
     auto_sync_min_distance_hours?: number
   }
 
-  const update: Record<string, unknown> = {}
+  const update: {
+    calendar_import_url?: string | null
+    auto_sync_urls?: string[]
+    auto_sync_enabled?: boolean
+    auto_sync_min_distance_hours?: number
+  } = {}
 
   if ('calendar_import_url' in body) {
     update.calendar_import_url = body.calendar_import_url
