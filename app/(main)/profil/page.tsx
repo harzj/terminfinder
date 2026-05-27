@@ -56,7 +56,7 @@ export default async function ProfilPage() {
 
   return (
     <ProfilClient
-      profile={profile ?? { id: user.id, display_name: '', bgg_username: null, bgg_collection: null, default_availability_times: null, calendar_token: '', calendar_import_url: null }}
+      profile={profile ?? { id: user.id, display_name: '', bgg_username: null }}
       email={user.email ?? ''}
       memberships={memberships}
       bggCollectionCount={Array.isArray(profile?.bgg_collection) ? (profile.bgg_collection as unknown[]).length : 0}
