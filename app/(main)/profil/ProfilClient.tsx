@@ -183,6 +183,9 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         auto_sync_min_distance_hours: autoSyncMinDistance,
       }),
     })
+    if (autoSyncEnabled) {
+      await fetch('/api/calendar/autosync', { method: 'POST' })
+    }
     setSavingAutoSync(false)
     setAutoSyncSaved(true)
     setTimeout(() => setAutoSyncSaved(false), 2000)

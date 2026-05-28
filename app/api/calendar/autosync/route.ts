@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
 import { parseICSEvents, BusyEvent } from '@/lib/ics'
 import { getTimesForDate, DefaultTimes } from '@/lib/holidays'
 import { addDays, format, parseISO } from 'date-fns'
@@ -334,4 +335,35 @@ export async function GET(req: NextRequest) {
   await admin.from('calendar_sync_log').delete().lt('synced_at', cutoff.toISOString())
 
   return NextResponse.json({ ok: true, results })
+}
+
+// ── POST: Sofort-Sync für den eingeloggten User ────────────────────────────
+
+export async function POST() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const admin = getAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('auto_sync_urls, auto_sync_min_distance_hours, default_availability_times')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+
+  const urls = ((profile.auto_sync_urls as string[] | null) ?? [])
+    .map(u => decryptUrl(u as string))
+    .filter(Boolean)
+
+  const result = await runAutoSyncForUser(
+    user.id,
+    urls,
+    profile.auto_sync_min_distance_hours ?? 3,
+    (profile.default_availability_times as DefaultTimes | null) ?? null,
+    admin
+  )
+
+  return NextResponse.json({ ok: true, ...result })
 }
