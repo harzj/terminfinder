@@ -1,9 +1,49 @@
 /**
  * ICS parsing and generation utilities.
  * No external dependencies — hand-rolled parser for VEVENT/DTSTART/DTEND.
+ *
+ * All times are normalised to Europe/Berlin so that comparisons against the
+ * user's availability window (also stored in Berlin local time) are correct.
  */
 
-// ── Parser ──────────────────────────────────────────────────────────────────
+// ── Timezone helpers ────────────────────────────────────────────────────────
+
+const BERLIN_TZ = 'Europe/Berlin'
+
+/** Convert a UTC Date to { date, time } in Europe/Berlin. */
+function toDateTimeInBerlin(d: Date): { date: string; time: string } {
+  const f = new Intl.DateTimeFormat('en', {
+    timeZone: BERLIN_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d)
+  const g = (t: string) => f.find(p => p.type === t)?.value ?? '00'
+  const h = g('hour')
+  return {
+    date: `${g('year')}-${g('month')}-${g('day')}`,
+    time: `${h === '24' ? '00' : h}:${g('minute')}`,
+  }
+}
+
+/**
+ * Interpret a floating datetime (e.g. "2026-05-29T15:00") as being in `tz`,
+ * and return the corresponding UTC Date.
+ * Uses the standard "pseudoUTC + offset correction" trick since the Temporal
+ * API is not yet available in all runtimes.
+ */
+function parseTZDatetime(rawDate: string, hh: string, mm: string, tz: string): Date {
+  const pseudoUtc = new Date(`${rawDate}T${hh}:${mm}:00Z`)
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(pseudoUtc)
+  const g = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? '0')
+  const h = g('hour') === 24 ? 0 : g('hour')
+  const inTzAsUtc = new Date(Date.UTC(g('year'), g('month') - 1, g('day'), h, g('minute')))
+  const offsetMs = pseudoUtc.getTime() - inTzAsUtc.getTime()
+  return new Date(pseudoUtc.getTime() + offsetMs)
+}
 
 /**
  * Extracts all "busy" dates (yyyy-MM-dd) from an ICS string.
@@ -23,14 +63,17 @@ export interface BusyEvent {
   summary: string
 }
 
-function parseEventLine(line: string): { name: string; value: string } | null {
+function parseEventLine(line: string): { name: string; value: string; tzid?: string } | null {
   const ci = line.indexOf(':')
   if (ci === -1) return null
   const rawName = line.slice(0, ci).trim()
   const value = line.slice(ci + 1).trim()
   if (!rawName) return null
-  const name = rawName.split(';')[0].toUpperCase()
-  return { name, value }
+  const parts = rawName.split(';')
+  const name = parts[0].toUpperCase()
+  const tzidPart = parts.slice(1).find(p => p.toUpperCase().startsWith('TZID='))
+  const tzid = tzidPart ? tzidPart.slice(5) : undefined
+  return { name, value, tzid }
 }
 
 function unescapeICSText(value: string): string {
@@ -41,7 +84,7 @@ function unescapeICSText(value: string): string {
     .replace(/\\\\/g, '\\')
 }
 
-function parseDTValue(value: string): { date: string; time: string | null } | null {
+function parseDTValue(value: string, tzid?: string): { date: string; time: string | null } | null {
   const v = value.trim()
   // All-day: YYYYMMDD (exactly 8 digits, no T)
   if (/^\d{8}$/.test(v)) {
@@ -50,7 +93,33 @@ function parseDTValue(value: string): { date: string; time: string | null } | nu
   // DateTime: YYYYMMDDTHHmm… — lenient: accept any suffix (Z, seconds, fractional, +offset)
   const m = v.match(/^(\d{8})T(\d{2})(\d{2})/)
   if (m) {
-    return { date: `${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}`, time: `${m[2]}:${m[3]}` }
+    const rawDate = `${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)}`
+    const hh = m[2]
+    const mm = m[3]
+    const isUtc = v.includes('Z')
+
+    if (isUtc) {
+      // UTC timestamp → convert to Europe/Berlin
+      return toDateTimeInBerlin(new Date(`${rawDate}T${hh}:${mm}:00Z`))
+    }
+
+    if (tzid) {
+      const normalTz = tzid.trim()
+      // Berlin-equivalent TZIDs — no conversion needed
+      const isBerlin = /^Europe\/Berlin$/i.test(normalTz) ||
+        /^CET$/i.test(normalTz) || /^CEST$/i.test(normalTz) ||
+        /^W\. Europe Standard Time$/i.test(normalTz)
+      if (!isBerlin) {
+        try {
+          return toDateTimeInBerlin(parseTZDatetime(rawDate, hh, mm, normalTz))
+        } catch {
+          // Unknown TZID — fall through and treat as Berlin floating time
+        }
+      }
+    }
+
+    // Floating time (no Z, no TZID) or Berlin TZID → already in Berlin local time
+    return { date: rawDate, time: `${hh}:${mm}` }
   }
   return null
 }
@@ -124,11 +193,11 @@ export function parseICSEvents(text: string): BusyEvent[] {
     const parsed = parseEventLine(line)
     if (!parsed) continue
     if (parsed.name === 'DTSTART') {
-      dtstart = parseDTValue(parsed.value)
+      dtstart = parseDTValue(parsed.value, parsed.tzid)
       continue
     }
     if (parsed.name === 'DTEND') {
-      dtend = parseDTValue(parsed.value)
+      dtend = parseDTValue(parsed.value, parsed.tzid)
       continue
     }
     if (parsed.name === 'SUMMARY') {
