@@ -11,6 +11,11 @@ jobs:
     steps:
       - name: Kalender-Sync auslösen
         run: |
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "Fehler: GitHub secret CRON_SECRET fehlt oder ist leer"
+            exit 1
+          fi
+
           STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
             -L \
             -X GET \

@@ -296,11 +296,12 @@ async function runAutoSyncForUser(
 export async function GET(req: NextRequest) {
   // Vercel Cron: protected with CRON_SECRET
   const secret = process.env.CRON_SECRET?.trim()
-  if (secret) {
-    const auth = req.headers.get('authorization')?.trim()
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!secret) {
+    return NextResponse.json({ error: 'Server misconfigured: CRON_SECRET missing' }, { status: 500 })
+  }
+  const auth = req.headers.get('authorization')?.trim()
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = getAdminClient()
