@@ -3,10 +3,6 @@
     {
       "path": "/api/push/weekly-reminder",
       "schedule": "0 12 * * 1"
-    },
-    {
-      "path": "/api/calendar/autosync",
-      "schedule": "0 6 * * *"
     }
   ]
 }

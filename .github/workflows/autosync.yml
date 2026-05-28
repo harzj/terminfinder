@@ -1,0 +1,22 @@
+name: Stündlicher Kalender-Sync
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Jede volle Stunde
+  workflow_dispatch: # Manueller Trigger zum Testen
+
+jobs:
+  autosync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kalender-Sync auslösen
+        run: |
+          STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://lass-treffen.de/api/calendar/autosync)
+          cat /tmp/response.json
+          if [ "$STATUS" != "200" ]; then
+            echo "Fehler: HTTP $STATUS"
+            exit 1
+          fi
