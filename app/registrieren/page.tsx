@@ -30,7 +30,12 @@ function RegistrierenForm() {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: name.trim() } },
+      options: {
+        data: { display_name: name.trim() },
+        emailRedirectTo: invite
+          ? `${window.location.origin}/auth/callback?next=/einladen/${invite}`
+          : `${window.location.origin}/auth/callback`,
+      },
     })
     if (error) {
       setError(error.message)
