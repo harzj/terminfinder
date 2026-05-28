@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Settings } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { ArrowLeft, Settings, LogOut } from 'lucide-react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import GruppenUebersicht from '@/components/GruppenUebersicht'
 import Abstimmungen from '@/components/Abstimmungen'
 import NaechsteTermine from '@/components/NaechsteTermine'
@@ -29,7 +31,23 @@ interface Props {
 export default function GruppenDetailClient({
   group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, bggUsername, bggCollection
 }: Props) {
+  const router = useRouter()
   const searchParams = useSearchParams()
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
+
+  const isCreator = group.created_by === currentUserId
+
+  const handleLeaveGroup = async () => {
+    setLeaving(true)
+    const supabase = createClient()
+    await supabase
+      .from('group_members')
+      .delete()
+      .eq('group_id', group.id)
+      .eq('user_id', currentUserId)
+    router.push('/gruppen')
+  }
   const requestedTab = searchParams.get('tab')
   const defaultTab = requestedTab === 'abstimmungen' || requestedTab === 'naechste' || requestedTab === 'archiv'
     ? requestedTab
@@ -47,10 +65,39 @@ export default function GruppenDetailClient({
           <h1 className="text-lg font-bold truncate">{group.name}</h1>
           <p className="text-xs text-muted-foreground">{members.length} Mitglieder · min. {group.min_participants} Personen</p>
         </div>
+        {!isCreator && (
+          <button
+            onClick={() => setLeaveDialogOpen(true)}
+            className="text-muted-foreground hover:text-destructive transition-colors"
+            title="Gruppe verlassen"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
+        )}
         <Link href={`/gruppen/${group.id}/einstellungen`}>
           <Settings className="h-5 w-5 text-muted-foreground hover:text-foreground" />
         </Link>
       </div>
+
+      {/* Bestätigungsdialog */}
+      <Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Gruppe verlassen?</DialogTitle>
+            <DialogDescription>
+              Du verlässt <strong>{group.name}</strong>. Du kannst nur über einen neuen Einladungslink wieder beitreten.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLeaveDialogOpen(false)} disabled={leaving}>
+              Abbrechen
+            </Button>
+            <Button variant="destructive" onClick={handleLeaveGroup} disabled={leaving}>
+              {leaving ? 'Verlasse...' : 'Gruppe verlassen'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Tabs */}
       <Tabs key={defaultTab} defaultValue={defaultTab} className="flex-1">
