@@ -295,12 +295,14 @@ async function runAutoSyncForUser(
 
 export async function GET(req: NextRequest) {
   // Vercel Cron: protected with CRON_SECRET
+  // Query-Parameter wird verwendet (überlebt HTTP-Redirects), Header als Fallback
   const secret = process.env.CRON_SECRET?.trim()
   if (!secret) {
     return NextResponse.json({ error: 'Server misconfigured: CRON_SECRET missing' }, { status: 500 })
   }
-  const auth = req.headers.get('authorization')?.trim()
-  if (auth !== `Bearer ${secret}`) {
+  const querySecret = req.nextUrl.searchParams.get('secret')?.trim()
+  const headerSecret = req.headers.get('authorization')?.trim()?.replace(/^Bearer\s+/i, '')
+  if (querySecret !== secret && headerSecret !== secret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

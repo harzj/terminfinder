@@ -19,8 +19,7 @@ jobs:
           STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
             -L \
             -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            https://lass-treffen.de/api/calendar/autosync)
+            "https://lass-treffen.de/api/calendar/autosync?secret=${{ secrets.CRON_SECRET }}")
           cat /tmp/response.json
           if [ "$STATUS" != "200" ]; then
             echo "Fehler: HTTP $STATUS"
