@@ -295,9 +295,9 @@ async function runAutoSyncForUser(
 
 export async function GET(req: NextRequest) {
   // Vercel Cron: protected with CRON_SECRET
-  const secret = process.env.CRON_SECRET
+  const secret = process.env.CRON_SECRET?.trim()
   if (secret) {
-    const auth = req.headers.get('authorization')
+    const auth = req.headers.get('authorization')?.trim()
     if (auth !== `Bearer ${secret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
