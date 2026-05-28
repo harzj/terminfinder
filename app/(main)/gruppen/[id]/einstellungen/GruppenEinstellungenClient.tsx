@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Copy, Check, UserPlus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Copy, Check, UserPlus, Trash2, RefreshCw } from 'lucide-react'
 
 interface Props {
   group: any
@@ -27,6 +27,9 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [joinCode, setJoinCode] = useState<string>(group.join_code ?? '')
+  const [copiedJoinCode, setCopiedJoinCode] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
 
   // Invite-Link eines Mitglieds kopieren
   const copyLink = (code: string) => {
@@ -87,6 +90,23 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
     setInviting(false)
   }
 
+  // Join-Code erneuern
+  const handleRegenerateCode = async () => {
+    setRegenerating(true)
+    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('regenerate_join_code', { p_group_id: group.id })
+    if (!error && data) setJoinCode(data)
+    setRegenerating(false)
+  }
+
+  // Join-Code kopieren
+  const copyJoinCode = () => {
+    navigator.clipboard.writeText(joinCode)
+    setCopiedJoinCode(true)
+    setTimeout(() => setCopiedJoinCode(false), 2000)
+  }
+
   // Mindest-Teilnehmer speichern
   const handleSaveMin = async () => {
     setSaving(true)
@@ -134,6 +154,32 @@ export default function GruppenEinstellungenClient({ group, members, currentUser
           </div>
         </CardContent>
       </Card>
+
+      {/* Beitrittscode */}
+      {joinCode && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Beitrittscode</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">Teile diesen Code, damit andere direkt beitreten können.</p>
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-2xl font-bold tracking-[0.3em] flex-1">{joinCode}</span>
+              <button onClick={copyJoinCode} className="text-muted-foreground hover:text-foreground" title="Code kopieren">
+                {copiedJoinCode ? <Check className="h-5 w-5 text-green-500" /> : <Copy className="h-5 w-5" />}
+              </button>
+            </div>
+            <Button
+              onClick={handleRegenerateCode}
+              disabled={regenerating}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? 'Wird erneuert…' : 'Code erneuern'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Einladungslink */}
       <Card>

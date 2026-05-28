@@ -5,6 +5,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Plus, Users, ChevronRight } from 'lucide-react'
 import DemoGruppeButton from './DemoGruppeButton'
+import JoinByCodeInput from './JoinByCodeInput'
 
 export default async function GruppenPage() {
   const supabase = await createClient()
@@ -35,6 +36,11 @@ export default async function GruppenPage() {
         <Link href="/gruppen/neu" className={buttonVariants({ size: 'sm' })}>
           <Plus className="h-4 w-4 mr-1" /> Neu
         </Link>
+      </div>
+
+      <div className="mt-6 space-y-2">
+        <p className="text-sm font-medium text-muted-foreground">Per Code beitreten</p>
+        <JoinByCodeInput />
       </div>
 
       {groups.length === 0 ? (
