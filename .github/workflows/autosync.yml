@@ -2,7 +2,7 @@ name: Stündlicher Kalender-Sync
 
 on:
   schedule:
-    - cron: '0 * * * *' # Jede volle Stunde
+    - cron: '*/15 * * * *' # Alle 15 Minuten
   workflow_dispatch: # Manueller Trigger zum Testen
 
 jobs:
