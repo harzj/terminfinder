@@ -74,9 +74,11 @@ export default function GruppenDetailClient({
             <LogOut className="h-5 w-5" />
           </button>
         )}
-        <Link href={`/gruppen/${group.id}/einstellungen`}>
-          <Settings className="h-5 w-5 text-muted-foreground hover:text-foreground" />
-        </Link>
+        {isCreator && (
+          <Link href={`/gruppen/${group.id}/einstellungen`}>
+            <Settings className="h-5 w-5 text-muted-foreground hover:text-foreground" />
+          </Link>
+        )}
       </div>
 
       {/* Bestätigungsdialog */}
