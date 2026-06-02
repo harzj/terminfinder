@@ -113,12 +113,12 @@ export default function NaechsteTermine({ group, availabilities, members, startD
     setGameSearch('')
   }
 
-  const existingVotingDates = useMemo(
-    () => new Set((events ?? []).filter((e: any) => e.status === 'voting').map((e: any) => e.proposed_date as string)),
+  const existingEventDates = useMemo(
+    () => new Set((events ?? []).filter((e: any) => e.status === 'voting' || e.status === 'confirmed').map((e: any) => e.proposed_date as string)),
     [events]
   )
   const blockedDateSet = useMemo(() => new Set(blockedDates ?? []), [blockedDates])
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Berlin' })
 
   const overlaps = useMemo(() => {
     const memberProfiles = members.map((m: any) => ({
@@ -131,8 +131,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
     }))
     return computeOverlaps(
       enriched, memberProfiles as any, group.min_participants, parseISO(startDate), parseISO(endDate)
-    ).filter(o => o.date >= todayStr && !existingVotingDates.has(o.date) && !blockedDateSet.has(o.date))
-  }, [availabilities, members, group.min_participants, startDate, endDate, existingVotingDates, blockedDateSet, todayStr])
+    ).filter(o => o.date >= todayStr && !existingEventDates.has(o.date) && !blockedDateSet.has(o.date))
+  }, [availabilities, members, group.min_participants, startDate, endDate, existingEventDates, blockedDateSet, todayStr])
 
   const sortedOverlaps = useMemo(() => {
     const sorted = [...overlaps]
