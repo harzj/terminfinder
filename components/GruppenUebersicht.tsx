@@ -3,7 +3,7 @@
 import { format, addDays, parseISO } from 'date-fns'
 import { de } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
-import { Lock } from 'lucide-react'
+import { Check, Lock } from 'lucide-react'
 
 interface Props {
   members: any[]
@@ -116,7 +116,7 @@ export default function GruppenUebersicht({ members, availabilities, events, sta
                       )}
                       title={isBlockedOtherGroup ? 'Termin in anderer Gruppe' : avail ? `${avail.status}${avail.from_time ? ` ${avail.from_time.slice(0, 5)}–${avail.until_time?.slice(0, 5) ?? ''}` : ''}` : 'keine Angabe'}
                     >
-                      {isConfirmed && <Lock className="h-3 w-3 text-blue-600" />}
+                      {isConfirmed && <Check className="h-3 w-3 text-blue-600" />}
                       {isBlockedOtherGroup && <Lock className="h-3 w-3 text-purple-500" />}
                     </div>
                   )
