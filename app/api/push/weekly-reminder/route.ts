@@ -40,8 +40,17 @@ export async function GET(request: NextRequest) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
+  // "Neu hinzugekommene Woche" im 5-Wochen-Fenster:
+  // aktuelle Woche (0) + 4 weitere Wochen => neue Woche ist Index 4 (Tage +28 bis +34)
+  const newWeekStart = new Date(monday);
+  newWeekStart.setDate(monday.getDate() + 28);
+  const newWeekEnd = new Date(newWeekStart);
+  newWeekEnd.setDate(newWeekStart.getDate() + 6);
+
   const mondayStr = monday.toISOString().slice(0, 10);
   const sundayStr = sunday.toISOString().slice(0, 10);
+  const newWeekStartStr = newWeekStart.toISOString().slice(0, 10);
+  const newWeekEndStr = newWeekEnd.toISOString().slice(0, 10);
 
   // Alle Nutzer mit Push-Subscription laden
   const { data: subscribers } = await admin
@@ -54,26 +63,27 @@ export async function GET(request: NextRequest) {
 
   const allUserIds = [...new Set(subscribers.map((s) => s.user_id))];
 
-  // Nutzer herausfiltern, die diese Woche bereits Verfügbarkeit eingetragen haben
+  // Nutzer herausfiltern, die in der neu hinzugekommenen Woche bereits etwas eingetragen haben.
+  // "Nichts eingetragen" entspricht überall busy (also keine availability-Zeile in dieser Woche).
   const { data: withAvail } = await admin
     .from("availability")
     .select("user_id")
     .in("user_id", allUserIds)
-    .gte("date", mondayStr)
-    .lte("date", sundayStr);
+    .gte("date", newWeekStartStr)
+    .lte("date", newWeekEndStr);
 
   const usersWithAvail = new Set((withAvail ?? []).map((a) => a.user_id));
   const usersToNotify = allUserIds.filter((id) => !usersWithAvail.has(id));
 
   if (usersToNotify.length === 0) {
-    return NextResponse.json({ sent: 0, week: `${mondayStr} – ${sundayStr}` });
+    return NextResponse.json({ sent: 0, week: `${mondayStr} – ${sundayStr}`, targetWeek: `${newWeekStartStr} – ${newWeekEndStr}` });
   }
 
   const subsToNotify = subscribers.filter((s) => usersToNotify.includes(s.user_id));
 
   const payload = JSON.stringify({
-    title: "Hast du diese Woche Zeit?",
-    body: "Du hast noch keine Verfügbarkeit für diese Woche eingetragen.",
+    title: "Neue Woche freigeschaltet",
+    body: "Du hast für die neu hinzugekommene Woche noch keine Verfügbarkeit eingetragen.",
     url: "/verfuegbarkeit",
   });
 
@@ -96,5 +106,5 @@ export async function GET(request: NextRequest) {
     })
   );
 
-  return NextResponse.json({ sent, week: `${mondayStr} – ${sundayStr}` });
+  return NextResponse.json({ sent, week: `${mondayStr} – ${sundayStr}`, targetWeek: `${newWeekStartStr} – ${newWeekEndStr}` });
 }
