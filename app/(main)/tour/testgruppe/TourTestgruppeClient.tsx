@@ -61,33 +61,58 @@ const members: DemoMember[] = [
   { user_id: 'u5', display_name: 'Tina', profiles: { availability_planning_months: 1 } },
 ]
 
-const demoDates = [
-  '2026-08-03',
-  '2026-08-06',
-  '2026-08-10',
-  '2026-08-15',
-  '2026-08-21',
-  '2026-08-28',
-  '2026-09-04',
-  '2026-09-12',
-  '2026-09-19',
-]
+const availabilityByMember: Record<string, Array<Pick<DemoAvailability, 'date' | 'status' | 'from_time' | 'until_time'>>> = {
+  // Jeder Mensch hat hier bewusst eigene Tage, damit die Übersicht und „Nächste Termine“ echte Unterschiede zeigen.
+  u1: [
+    { date: '2026-08-03', status: 'available', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-05', status: 'uncertain', from_time: '18:00', until_time: '21:30' },
+    { date: '2026-08-06', status: 'available', from_time: '18:00', until_time: '23:00' },
+    { date: '2026-08-09', status: 'uncertain', from_time: '19:00', until_time: '22:00' },
+    { date: '2026-08-12', status: 'available', from_time: '18:30', until_time: '23:00' },
+    { date: '2026-08-21', status: 'available', from_time: '19:00', until_time: '22:30' },
+  ],
+  u2: [
+    { date: '2026-08-03', status: 'available', from_time: '18:00', until_time: '22:15' },
+    { date: '2026-08-04', status: 'uncertain', from_time: '18:30', until_time: '22:30' },
+    { date: '2026-08-08', status: 'available', from_time: '18:00', until_time: '23:00' },
+    { date: '2026-08-09', status: 'available', from_time: '18:30', until_time: '22:30' },
+    { date: '2026-08-12', status: 'uncertain', from_time: '19:00', until_time: '23:00' },
+    { date: '2026-08-21', status: 'available', from_time: '18:00', until_time: '23:00' },
+  ],
+  u3: [
+    { date: '2026-08-04', status: 'available', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-09', status: 'available', from_time: '18:30', until_time: '23:00' },
+    { date: '2026-08-12', status: 'uncertain', from_time: '19:00', until_time: '22:30' },
+    { date: '2026-08-15', status: 'available', from_time: '18:00', until_time: '23:00' },
+    { date: '2026-08-21', status: 'uncertain', from_time: '19:00', until_time: '22:00' },
+    { date: '2026-08-28', status: 'available', from_time: '18:00', until_time: '23:00' },
+  ],
+  u4: [
+    { date: '2026-08-06', status: 'available', from_time: '18:30', until_time: '22:30' },
+    { date: '2026-08-09', status: 'uncertain', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-12', status: 'available', from_time: '18:00', until_time: '23:00' },
+    { date: '2026-08-19', status: 'available', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-21', status: 'uncertain', from_time: '19:00', until_time: '23:00' },
+  ],
+  u5: [
+    { date: '2026-08-03', status: 'uncertain', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-06', status: 'available', from_time: '18:00', until_time: '23:00' },
+    { date: '2026-08-09', status: 'available', from_time: '18:00', until_time: '22:30' },
+    { date: '2026-08-12', status: 'available', from_time: '18:30', until_time: '23:00' },
+    { date: '2026-08-19', status: 'uncertain', from_time: '18:00', until_time: '22:00' },
+    { date: '2026-08-21', status: 'available', from_time: '19:00', until_time: '23:00' },
+  ],
+}
 
-const baseAvailability: DemoAvailability[] = demoDates.flatMap((date, dateIndex) => {
-  return members.map((member, memberIndex) => {
-    const pattern = (dateIndex + memberIndex) % 5
-    const status = pattern === 0 || pattern === 1 ? 'available' : 'uncertain'
-    const from_time = pattern === 4 ? '19:00' : pattern === 3 ? '18:30' : '18:00'
-    const until_time = pattern === 0 ? '22:00' : pattern === 1 ? '22:30' : '23:00'
-    return {
-      user_id: member.user_id,
-      date,
-      status,
-      from_time,
-      until_time,
-      profiles: { display_name: member.display_name },
-    }
-  })
+const baseAvailability: DemoAvailability[] = members.flatMap((member) => {
+  return availabilityByMember[member.user_id].map((availability) => ({
+    user_id: member.user_id,
+    date: availability.date,
+    status: availability.status,
+    from_time: availability.from_time,
+    until_time: availability.until_time,
+    profiles: { display_name: member.display_name },
+  }))
 })
 
 const initialEvents: DemoEvent[] = [
@@ -183,8 +208,8 @@ const archiveSeed: DemoArchiveEvent[] = [
 
 const bggLookupIds = {
   Catan: 13,
-  Hitster: 360901,
-  Mysterium: 181687,
+  Hitster: 318243,
+  Mysterium: 181304,
 } as const
 
 function labelForResponse(response: ResponseType) {
@@ -390,11 +415,17 @@ export default function TourTestgruppeClient() {
                             type="button"
                             onClick={() => updateResponse(response)}
                             className={
-                              response === 'accepted'
-                                ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-green-500 text-white border-green-600'
-                                : response === 'uncertain'
-                                  ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-yellow-400 text-black border-yellow-500'
-                                  : 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-red-100 text-red-700 border-red-300'
+                              active
+                                ? response === 'accepted'
+                                  ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-green-500 text-white border-green-600'
+                                  : response === 'uncertain'
+                                    ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-yellow-400 text-black border-yellow-500'
+                                    : 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-red-100 text-red-700 border-red-300'
+                                : response === 'accepted'
+                                  ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-background text-green-700 border-green-300 hover:bg-green-50'
+                                  : response === 'uncertain'
+                                    ? 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-background text-yellow-700 border-yellow-300 hover:bg-yellow-50'
+                                    : 'rounded-lg border-2 px-2 py-2 text-xs font-medium transition-colors bg-background text-red-700 border-red-300 hover:bg-red-50'
                             }
                           >
                             <Icon className="h-4 w-4 mx-auto mb-1" />
