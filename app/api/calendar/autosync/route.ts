@@ -353,7 +353,7 @@ export async function POST() {
   const admin = getAdminClient()
   const { data: profile } = await admin
     .from('profiles')
-    .select('auto_sync_urls, auto_sync_min_distance_hours, default_availability_times')
+    .select('auto_sync_urls, auto_sync_min_distance_hours, default_availability_times, availability_planning_months')
     .eq('id', user.id)
     .single()
 
@@ -367,6 +367,7 @@ export async function POST() {
     user.id,
     urls,
     profile.auto_sync_min_distance_hours ?? 3,
+    profile.availability_planning_months ?? 1,
     (profile.default_availability_times as DefaultTimes | null) ?? null,
     admin
   )
