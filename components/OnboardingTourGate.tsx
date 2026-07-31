@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { X, ChevronRight } from 'lucide-react'
+import { X, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type TourStep = {
@@ -114,6 +114,12 @@ const STEPS: TourStep[] = [
     body: 'Diese Testgruppe existiert nur für die Tour. Hier kannst du die Übersicht und unterschiedliche Planungshorizonte gefahrlos ansehen.',
     nextLabel: 'Zur Testgruppe',
   },
+  {
+    path: '/tour/testgruppe',
+    targetId: 'tour-testgroup-tabs',
+    title: 'Tabs wie in einer echten Gruppe',
+    body: 'In der Tour-Testgruppe findest du dieselben Tabs wie in einer normalen Gruppe: Übersicht, Abstimmungen, Nächste und Archiv.',
+  },
 ]
 
 async function markTourSeen(seen: boolean) {
@@ -130,6 +136,7 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
   const [open, setOpen] = useState(initialSeenAt === null)
   const [stepIndex, setStepIndex] = useState(0)
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null)
+  const [advancing, setAdvancing] = useState(false)
   const currentStep = useMemo(() => STEPS[Math.min(stepIndex, STEPS.length - 1)], [stepIndex])
 
   useEffect(() => {
@@ -168,20 +175,25 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
   }, [currentStep.targetId, open, pathname])
 
   const closeTour = async () => {
+    setAdvancing(true)
     await markTourSeen(true)
     setOpen(false)
+    setAdvancing(false)
     router.refresh()
   }
 
   const restartTour = async () => {
+    setAdvancing(true)
     await markTourSeen(false)
     setOpen(true)
     setStepIndex(0)
     router.replace('/verfuegbarkeit')
+    setAdvancing(false)
     router.refresh()
   }
 
   const handleNext = async () => {
+    setAdvancing(true)
     if (stepIndex >= STEPS.length - 1) {
       await closeTour()
       router.push('/verfuegbarkeit')
@@ -192,6 +204,7 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
     if (pathname !== nextStep.path) {
       router.push(nextStep.path)
     }
+    setAdvancing(false)
   }
 
   if (!open) return null
@@ -224,10 +237,10 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
           <h2 className="mt-1 text-base font-semibold">{currentStep.title}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{currentStep.body}</p>
           <div className="mt-4 flex items-center gap-2">
-            <Button onClick={handleNext} className="flex-1">
-              {(currentStep.nextLabel ?? 'Weiter')} <ChevronRight className="h-4 w-4 ml-1" />
+            <Button onClick={handleNext} className="flex-1" disabled={advancing}>
+              {advancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <><span>{currentStep.nextLabel ?? 'Weiter'}</span><ChevronRight className="h-4 w-4 ml-1" /></>}
             </Button>
-            <Button variant="outline" onClick={restartTour}>Neustart</Button>
+            <Button variant="outline" onClick={restartTour} disabled={advancing}>Neustart</Button>
           </div>
         </div>
       </div>

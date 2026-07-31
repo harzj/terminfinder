@@ -7,6 +7,7 @@ import NotificationSetup from './NotificationSetup'
 import PushBanner from './PushBanner'
 import AutoSyncBanner from './AutoSyncBanner'
 import OnboardingTourGate from '@/components/OnboardingTourGate'
+import NavigationLoadingBar from '@/components/NavigationLoadingBar'
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -23,6 +24,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   return (
     <>
       <NotificationSetup />
+      <NavigationLoadingBar />
       <div className="flex flex-col min-h-screen">
         <header className="shrink-0 border-b border-border bg-background">
           <div className="mx-auto w-full max-w-[560px]">

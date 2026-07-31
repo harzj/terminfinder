@@ -782,44 +782,51 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       </Card>
 
       {/* Benachrichtigungen */}
-      <div id="tour-profile-notifications" className="flex gap-2">
-      <Button
-        variant="outline"
-        className="flex-1"
-        onClick={handleEnableNotifications}
-        disabled={notifStatus === 'requesting'}
-      >
-        {notifStatus === 'requesting' ? (
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        ) : notifStatus === 'done' ? (
-          <Check className="h-4 w-4 mr-2" />
-        ) : (
-          <Bell className="h-4 w-4 mr-2" />
-        )}
-        {notifStatus === 'done'
-          ? 'Benachrichtigungen aktiviert'
-          : notifStatus === 'denied'
-          ? 'Benachrichtigungen blockiert – in Browser-Einstellungen erlauben'
-          : notifStatus === 'error'
-          ? 'Fehler – erneut versuchen'
-          : 'Benachrichtigungen aktivieren'}
-      </Button>
-      <Button
-        variant="outline"
-        className="flex-1"
-        onClick={handleDisableNotifications}
-        disabled={disableStatus === 'loading'}
-      >
-        {disableStatus === 'loading' ? (
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-        ) : disableStatus === 'done' ? (
-          <Check className="h-4 w-4 mr-2" />
-        ) : (
-          <BellOff className="h-4 w-4 mr-2" />
-        )}
-        {disableStatus === 'done' ? 'Deaktiviert' : 'Benachrichtigungen aus'}
-      </Button>
-      </div>
+      <Card id="tour-profile-notifications">
+        <CardHeader className="py-3">
+          <CardTitle className="text-base">Benachrichtigungen</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Hier aktivierst oder deaktivierst du Push-Nachrichten für Terminänderungen.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleEnableNotifications}
+              disabled={notifStatus === 'requesting'}
+            >
+              {notifStatus === 'requesting' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : notifStatus === 'done' ? (
+                <Check className="h-4 w-4 mr-2" />
+              ) : (
+                <Bell className="h-4 w-4 mr-2" />
+              )}
+              Aktivieren
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleDisableNotifications}
+              disabled={disableStatus === 'loading'}
+            >
+              {disableStatus === 'loading' ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : disableStatus === 'done' ? (
+                <Check className="h-4 w-4 mr-2" />
+              ) : (
+                <BellOff className="h-4 w-4 mr-2" />
+              )}
+              Deaktivieren
+            </Button>
+          </div>
+          {(notifStatus === 'error' || notifStatus === 'denied') && notifError && (
+            <p className="text-xs text-destructive">{notifError}</p>
+          )}
+        </CardContent>
+      </Card>
       {(notifStatus === 'error' || notifStatus === 'denied') && notifError && (
         <p className="text-xs text-destructive -mt-2">{notifError}</p>
       )}
