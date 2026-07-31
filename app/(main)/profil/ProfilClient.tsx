@@ -14,6 +14,8 @@ import { DefaultTimes } from '@/lib/holidays'
 import { Badge } from '@/components/ui/badge'
 import { clampPlanningMonths } from '@/lib/planningWindow'
 
+const DEMO_MODE_KEY = 'onboarding_tour_demo_mode'
+
 function parseImportUrls(raw: string | null): string[] {
   const items = (raw ?? '')
     .split(/\r?\n/)
@@ -309,6 +311,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     if (!confirmed) return
     setResettingTour(true)
     try {
+      window.sessionStorage.removeItem(DEMO_MODE_KEY)
       const response = await fetch('/api/profile/onboarding-tour', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
