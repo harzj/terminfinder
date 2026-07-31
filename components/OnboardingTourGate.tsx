@@ -198,10 +198,10 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/60" aria-hidden="true" />
+      <div className="fixed inset-0 z-[100] bg-black/60" aria-hidden="true" />
       {highlightRect && (
         <div
-          className="fixed z-50 rounded-2xl ring-4 ring-amber-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] pointer-events-none"
+          className="fixed z-[110] rounded-2xl ring-4 ring-amber-400/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] pointer-events-none"
           style={{
             top: Math.max(8, highlightRect.top - 8),
             left: Math.max(8, highlightRect.left - 8),
@@ -210,7 +210,7 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
           }}
         />
       )}
-      <div className="fixed inset-x-0 bottom-0 z-50 p-4 pb-6 pointer-events-none">
+      <div className="fixed inset-x-0 bottom-0 z-[120] p-4 pb-6 pointer-events-none">
         <div className="relative mx-auto max-w-[560px] pointer-events-auto rounded-2xl border border-border bg-background p-4 shadow-xl">
           <button
             type="button"

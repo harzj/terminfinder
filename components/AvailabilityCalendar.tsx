@@ -200,7 +200,7 @@ export default function AvailabilityCalendar({
 
   return (
     <>
-      <div id="tour-availability-grid" className="space-y-4">
+      <div id="tour-availability-grid" className="space-y-4 rounded-2xl ring-1 ring-transparent">
         {weeks.map((week, wi) => (
           <div key={wi}>
             <div className="grid grid-cols-7 gap-1">
