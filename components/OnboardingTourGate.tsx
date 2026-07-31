@@ -106,21 +106,17 @@ const STEPS: TourStep[] = [
     targetId: 'tour-groups-list',
     title: 'Gruppenübersicht',
     body: 'Hier siehst du deine Gruppen. Du kannst per Login-Link oder Code beitreten oder eigene Gruppen anlegen.',
+    nextLabel: 'Zur Testgruppe',
   },
   {
     path: '/tour/testgruppe',
     targetId: 'tour-testgroup-overview',
     title: 'Testgruppe',
     body: 'Diese Testgruppe existiert nur für die Tour. Hier kannst du die Übersicht und unterschiedliche Planungshorizonte gefahrlos ansehen.',
-    nextLabel: 'Zur Testgruppe',
-  },
-  {
-    path: '/tour/testgruppe',
-    targetId: 'tour-testgroup-tabs',
-    title: 'Tabs wie in einer echten Gruppe',
-    body: 'In der Tour-Testgruppe findest du dieselben Tabs wie in einer normalen Gruppe: Übersicht, Abstimmungen, Nächste und Archiv.',
   },
 ]
+
+const DEMO_MODE_KEY = 'onboarding_tour_demo_mode'
 
 async function markTourSeen(seen: boolean) {
   await fetch('/api/profile/onboarding-tour', {
@@ -133,15 +129,21 @@ async function markTourSeen(seen: boolean) {
 export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: string; initialSeenAt: string | null }) {
   const router = useRouter()
   const pathname = usePathname()
-  const [open, setOpen] = useState(initialSeenAt === null)
+  const [demoMode, setDemoMode] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.sessionStorage.getItem(DEMO_MODE_KEY) === '1'
+  })
+  const [open, setOpen] = useState(initialSeenAt === null && !demoMode)
   const [stepIndex, setStepIndex] = useState(0)
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null)
   const [advancing, setAdvancing] = useState(false)
   const currentStep = useMemo(() => STEPS[Math.min(stepIndex, STEPS.length - 1)], [stepIndex])
 
   useEffect(() => {
-    setOpen(initialSeenAt === null)
-    if (initialSeenAt === null) setStepIndex(0)
+    const storedDemoMode = window.sessionStorage.getItem(DEMO_MODE_KEY) === '1'
+    setDemoMode(storedDemoMode)
+    setOpen(initialSeenAt === null && !storedDemoMode)
+    if (initialSeenAt === null && !storedDemoMode) setStepIndex(0)
   }, [initialSeenAt])
 
   useEffect(() => {
@@ -184,6 +186,8 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
 
   const restartTour = async () => {
     setAdvancing(true)
+    window.sessionStorage.removeItem(DEMO_MODE_KEY)
+    setDemoMode(false)
     await markTourSeen(false)
     setOpen(true)
     setStepIndex(0)
@@ -200,6 +204,14 @@ export default function OnboardingTourGate({ userId, initialSeenAt }: { userId: 
       return
     }
     const nextStep = STEPS[stepIndex + 1]
+    if (nextStep.path === '/tour/testgruppe') {
+      window.sessionStorage.setItem(DEMO_MODE_KEY, '1')
+      setDemoMode(true)
+      setOpen(false)
+      setAdvancing(false)
+      router.push(nextStep.path)
+      return
+    }
     setStepIndex((value) => Math.min(value + 1, STEPS.length - 1))
     if (pathname !== nextStep.path) {
       router.push(nextStep.path)

@@ -160,6 +160,9 @@ export default function TourTestgruppeClient() {
   }
 
   const finishTour = async () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem('onboarding_tour_demo_mode')
+    }
     await fetch('/api/profile/onboarding-tour', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -171,6 +174,11 @@ export default function TourTestgruppeClient() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardContent className="pt-4 text-sm text-muted-foreground">
+          In der Testgruppe kannst du die Tabs selbst durchklicken. Der Button unten beendet die Tour erst, wenn du fertig bist.
+        </CardContent>
+      </Card>
       <div className="rounded-xl border border-border bg-background p-1">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as typeof activeTab)} className="w-full flex-col gap-0">
           <TabsList variant="line" className="w-full rounded-none border-b border-border bg-background h-auto p-0">
