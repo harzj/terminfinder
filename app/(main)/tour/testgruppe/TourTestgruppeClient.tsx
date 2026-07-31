@@ -143,9 +143,10 @@ export default function TourTestgruppeClient() {
         entry.user_id === 'u1' ? { ...entry, response } : entry
       )
       const acceptedCount = nextResponses.filter((entry) => entry.response === 'accepted').length
+      const nextStatus: DemoEvent['status'] = response === 'accepted' && acceptedCount >= event.min_participants ? 'confirmed' : 'voting'
       return {
         ...event,
-        status: response === 'accepted' && acceptedCount >= event.min_participants ? 'confirmed' : 'voting',
+        status: nextStatus,
         event_responses: nextResponses,
       }
     })
