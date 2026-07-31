@@ -29,9 +29,10 @@ interface Props {
   blockedDates?: string[]
   bggUsername?: string | null
   bggCollection?: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
+  readOnly?: boolean
 }
 
-export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events, blockedDates, bggUsername, bggCollection }: Props) {
+export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events, blockedDates, bggUsername, bggCollection, readOnly = false }: Props) {
   const router = useRouter()
 
   // Dialog-State für den Vorschlagen-Dialog
@@ -173,7 +174,7 @@ export default function NaechsteTermine({ group, availabilities, members, startD
   const closeDialog = () => { setDialogOverlap(null); setSelectedGames([]); setGameSearch(''); setDialogNote('') }
 
   const handleCreate = async () => {
-    if (!dialogOverlap || creating) return
+    if (!dialogOverlap || creating || readOnly) return
     setCreating(true)
     const supabase = createClient()
     const { data: event } = await supabase.from('events').insert({
@@ -261,8 +262,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
                   <span key={p.id} className="w-4 h-4 rounded-full bg-yellow-400 inline-block" title={p.display_name} />
                 ))}
               </div>
-              <Button size="sm" variant="outline" className="w-full" onClick={() => openDialog(overlap)}>
-                Als Abstimmung vorschlagen
+              <Button size="sm" variant="outline" className="w-full" onClick={() => openDialog(overlap)} disabled={readOnly}>
+                {readOnly ? 'Nur Vorschau' : 'Als Abstimmung vorschlagen'}
               </Button>
             </CardContent>
           </Card>
@@ -389,8 +390,8 @@ export default function NaechsteTermine({ group, availabilities, members, startD
               </div>
             </div>
 
-            <Button className="w-full" onClick={handleCreate} disabled={creating}>
-              {creating ? 'Wird vorgeschlagen…' : 'Abstimmung starten'}
+            <Button className="w-full" onClick={handleCreate} disabled={creating || readOnly}>
+              {readOnly ? 'Nur Vorschau' : creating ? 'Wird vorgeschlagen…' : 'Abstimmung starten'}
             </Button>
           </div>
         </DialogContent>

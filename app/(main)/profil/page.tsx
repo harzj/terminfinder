@@ -13,7 +13,7 @@ export default async function ProfilPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, display_name, bgg_username, bgg_collection, default_availability_times, availability_planning_months, calendar_token, calendar_import_url, auto_sync_enabled, auto_sync_urls, auto_sync_min_distance_hours')
+    .select('id, display_name, bgg_username, bgg_collection, default_availability_times, availability_planning_months, onboarding_tour_seen_at, calendar_token, calendar_import_url, auto_sync_enabled, auto_sync_urls, auto_sync_min_distance_hours')
     .eq('id', user.id)
     .single()
 

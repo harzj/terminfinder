@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/server'
 import Image from 'next/image'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
@@ -5,8 +6,20 @@ import BottomNav from '@/components/BottomNav'
 import NotificationSetup from './NotificationSetup'
 import PushBanner from './PushBanner'
 import AutoSyncBanner from './AutoSyncBanner'
+import OnboardingTourGate from '@/components/OnboardingTourGate'
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+export default async function MainLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data: profile } = user
+    ? await supabase
+        .from('profiles')
+        .select('onboarding_tour_seen_at')
+        .eq('id', user.id)
+        .single()
+    : { data: null as { onboarding_tour_seen_at: string | null } | null }
+
   return (
     <>
       <NotificationSetup />
@@ -24,6 +37,12 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <main className="flex-1 overflow-y-auto pb-20">
+          {user && (
+            <OnboardingTourGate
+              userId={user.id}
+              initialSeenAt={profile?.onboarding_tour_seen_at ?? null}
+            />
+          )}
           <PushBanner />
           <AutoSyncBanner />
           {children}

@@ -123,10 +123,11 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, tota
           {saveError}
         </div>
       )}
-      <div className="mb-4">
+      <div id="tour-availability-intro" className="mb-4">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold">Meine Verfügbarkeit</h2>
           <button
+            id="tour-availability-lock"
             type="button"
             onClick={toggleLocked}
             aria-label={locked ? 'Verfügbarkeit entsperren' : 'Verfügbarkeit sperren'}
@@ -158,6 +159,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, tota
 
       <div className="mt-4">
         <Button
+          id="tour-availability-import"
           variant="outline"
           size="sm"
           className="w-full"

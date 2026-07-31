@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Hash } from 'lucide-react'
 
-export default function JoinByCodeButton() {
+export default function JoinByCodeButton({ buttonId }: { buttonId?: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState('')
@@ -44,7 +44,7 @@ export default function JoinByCodeButton() {
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={openDialog}>
+      <Button id={buttonId} size="sm" variant="outline" onClick={openDialog}>
         <Hash className="h-4 w-4 mr-1" /> Code
       </Button>
 

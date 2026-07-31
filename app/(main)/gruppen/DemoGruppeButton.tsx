@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Sparkles } from 'lucide-react'
 
-export default function DemoGruppeButton() {
+export default function DemoGruppeButton({ buttonId }: { buttonId?: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +26,7 @@ export default function DemoGruppeButton() {
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <Button variant="outline" onClick={handleCreate} disabled={loading}>
+      <Button id={buttonId} variant="outline" onClick={handleCreate} disabled={loading}>
         <Sparkles className="h-4 w-4 mr-2" />
         {loading ? 'Erstelle Demo…' : 'Demo Gruppe erstellen'}
       </Button>

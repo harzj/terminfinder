@@ -200,7 +200,7 @@ export default function AvailabilityCalendar({
 
   return (
     <>
-      <div className="space-y-4">
+      <div id="tour-availability-grid" className="space-y-4">
         {weeks.map((week, wi) => (
           <div key={wi}>
             <div className="grid grid-cols-7 gap-1">
@@ -272,7 +272,8 @@ export default function AvailabilityCalendar({
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl pb-8">
           <SheetHeader>
-            <SheetTitle>
+            <SheetTitle id="tour-availability-sheet">
+            
               {sheetDate && format(sheetDate, 'EEEE, d. MMMM', { locale: de })}
               {sheetAvail?.status === 'available' && <span className="ml-2 text-sm text-green-600 font-normal">Kann</span>}
               {sheetAvail?.status === 'uncertain' && <span className="ml-2 text-sm text-yellow-600 font-normal">Unklar</span>}

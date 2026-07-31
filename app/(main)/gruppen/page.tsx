@@ -31,11 +31,11 @@ export default async function GruppenPage() {
 
   return (
     <div className="p-4 max-w-lg mx-auto">
-      <div className="flex items-center justify-between mb-4">
+      <div id="tour-groups-list" className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">Meine Gruppen</h1>
         <div className="flex gap-2">
-          <JoinByCodeButton />
-          <Link href="/gruppen/neu" className={buttonVariants({ size: 'sm' })}>
+          <JoinByCodeButton buttonId="tour-groups-join" />
+          <Link id="tour-groups-create" href="/gruppen/neu" className={buttonVariants({ size: 'sm' })}>
             <Plus className="h-4 w-4 mr-1" /> Neu
           </Link>
         </div>
@@ -50,7 +50,7 @@ export default async function GruppenPage() {
             <Link href="/gruppen/neu" className={buttonVariants()}>
               Gruppe erstellen
             </Link>
-            <DemoGruppeButton />
+            <DemoGruppeButton buttonId="tour-groups-demo" />
           </div>
         </div>
       ) : (

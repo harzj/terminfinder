@@ -35,7 +35,7 @@ interface Membership {
 }
 
 interface Props {
-  profile: { id: string; display_name: string; bgg_username: string | null; availability_planning_months?: number | null }
+  profile: { id: string; display_name: string; bgg_username: string | null; availability_planning_months?: number | null; onboarding_tour_seen_at?: string | null }
   email: string
   memberships: Membership[]
   bggCollectionCount: number
@@ -103,6 +103,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
   const [autoSyncOptionsOpen, setAutoSyncOptionsOpen] = useState(false)
   const [savingAutoSync, setSavingAutoSync] = useState(false)
   const [autoSyncSaved, setAutoSyncSaved] = useState(false)
+  const [resettingTour, setResettingTour] = useState(false)
 
   const handleEnableNotifications = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -302,6 +303,21 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     setTimeout(() => setImportUrlSaved(false), 2000)
   }
 
+  const handleRestartTour = async () => {
+    if (resettingTour) return
+    const confirmed = window.confirm('Soll die Tour neu gestartet werden?')
+    if (!confirmed) return
+    setResettingTour(true)
+    await fetch('/api/profile/onboarding-tour', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seen: false }),
+    })
+    setResettingTour(false)
+    router.push('/verfuegbarkeit')
+    router.refresh()
+  }
+
   const updateImportUrl = (index: number, value: string) => {
     setImportUrlSaved(false)
     setImportUrls((prev) => prev.map((url, i) => (i === index ? value : url)))
@@ -346,7 +362,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       <p className="text-sm text-muted-foreground -mt-3">{email}</p>
 
       {/* Globale Einstellungen */}
-      <Card>
+      <Card id="tour-profile-general">
         <CardHeader>
           <CardTitle className="text-base">Allgemein</CardTitle>
         </CardHeader>
@@ -406,41 +422,44 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
           </Button>
 
           {/* BGG-Sammlung synchronisieren */}
-          {(profile.bgg_username || bggUsername.trim()) && (
-            <div className="border-t border-border pt-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">BGG-Sammlung</span>
-                <span className="text-xs text-muted-foreground">
-                  {syncedCount !== null
-                    ? `${syncedCount} Spiele geladen`
-                    : bggCollectionCount > 0
-                    ? `${bggCollectionCount} Spiele gecacht`
-                    : 'Noch nicht synchronisiert'}
-                </span>
-              </div>
-              {syncError && <p className="text-xs text-destructive">{syncError}</p>}
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={handleSyncCollection}
-                disabled={syncingCollection || !bggUsername.trim()}
-              >
-                {syncingCollection ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Wird geladen…</>
-                ) : (
-                  <><RefreshCw className="h-4 w-4 mr-1" /> Sammlung synchronisieren</>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground">Lädt deine aktuellen BGG-Spiele und speichert sie lokal.</p>
+          <div id="tour-profile-bgg" className="border-t border-border pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">BGG-Sammlung</span>
+              <span className="text-xs text-muted-foreground">
+                {syncedCount !== null
+                  ? `${syncedCount} Spiele geladen`
+                  : bggCollectionCount > 0
+                  ? `${bggCollectionCount} Spiele gecacht`
+                  : 'Noch nicht synchronisiert'}
+              </span>
             </div>
-          )}
+            {!bggUsername.trim() && (
+              <p className="text-xs text-muted-foreground">
+                Hinterlege zuerst deinen BGG-Nutzernamen, damit du deine Sammlung synchronisieren kannst.
+              </p>
+            )}
+            {syncError && <p className="text-xs text-destructive">{syncError}</p>}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleSyncCollection}
+              disabled={syncingCollection || !bggUsername.trim()}
+            >
+              {syncingCollection ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Wird geladen…</>
+              ) : (
+                <><RefreshCw className="h-4 w-4 mr-1" /> Sammlung synchronisieren</>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground">Lädt deine aktuellen BGG-Spiele und speichert sie lokal.</p>
+          </div>
         </CardContent>
       </Card>
 
       {/* Per-Gruppen-Namen */}
       {memberships.length > 0 && (
-        <Card>
+        <Card id="tour-profile-groupnames">
           <CardHeader
             className="cursor-pointer select-none py-3"
             onClick={() => setGroupNamesOpen((v) => !v)}
@@ -488,7 +507,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       )}
 
       {/* Standard-Uhrzeiten */}
-      <Card>
+      <Card id="tour-profile-times">
         <CardHeader
           className="cursor-pointer select-none py-3"
           onClick={() => setTimesOpen((v) => !v)}
@@ -556,7 +575,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       </Card>
 
       {/* Kalender-Integration */}
-      <Card>
+      <Card id="tour-profile-calendar">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <CalendarDays className="h-4 w-4" /> Kalender-Integration
@@ -668,7 +687,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       </Card>
 
       {/* Auto-Sync (Beta) */}
-      <Card>
+      <Card id="tour-profile-autosync">
         <CardHeader className="py-3">
           <CardTitle className="text-base flex items-center gap-2">
             <RotateCcw className="h-4 w-4" />
@@ -763,7 +782,7 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
       </Card>
 
       {/* Benachrichtigungen */}
-      <div className="flex gap-2">
+      <div id="tour-profile-notifications" className="flex gap-2">
       <Button
         variant="outline"
         className="flex-1"
@@ -805,8 +824,22 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
         <p className="text-xs text-destructive -mt-2">{notifError}</p>
       )}
 
+      <Card id="tour-profile-restart">
+        <CardHeader className="py-3">
+          <CardTitle className="text-base">Tutorial</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Du kannst die Einführung jederzeit erneut starten, wenn du sie noch einmal sehen möchtest.
+          </p>
+          <Button variant="outline" className="w-full" onClick={handleRestartTour} disabled={resettingTour}>
+            {resettingTour ? 'Starte neu…' : 'Tour neu starten'}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Abmelden */}
-      <Button variant="outline" className="w-full" onClick={handleLogout}>
+      <Button id="tour-profile-logout" variant="outline" className="w-full" onClick={handleLogout}>
         <LogOut className="h-4 w-4 mr-2" />
         Abmelden
       </Button>
