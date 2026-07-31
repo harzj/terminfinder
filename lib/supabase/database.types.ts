@@ -157,6 +157,7 @@ export interface Database {
           min_participants: number
           status: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by: string
+          host_user_id: string | null
           notes: string | null
           cancelled_at: string | null
           created_at: string
@@ -170,6 +171,7 @@ export interface Database {
           min_participants?: number
           status?: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by: string
+          host_user_id?: string | null
           notes?: string | null
           cancelled_at?: string | null
           created_at?: string
@@ -183,6 +185,7 @@ export interface Database {
           min_participants?: number
           status?: 'voting' | 'confirmed' | 'expired' | 'cancelled'
           proposed_by?: string
+          host_user_id?: string | null
           notes?: string | null
           cancelled_at?: string | null
           created_at?: string
@@ -196,6 +199,7 @@ export interface Database {
           user_id: string
           response: 'accepted' | 'declined' | 'uncertain'
           previous_response: 'accepted' | 'declined' | 'uncertain' | null
+          host_offer: boolean
           updated_at: string
         }
         Insert: {
@@ -204,6 +208,7 @@ export interface Database {
           user_id: string
           response?: 'accepted' | 'declined' | 'uncertain'
           previous_response?: 'accepted' | 'declined' | 'uncertain' | null
+          host_offer?: boolean
           updated_at?: string
         }
         Update: {
@@ -212,6 +217,7 @@ export interface Database {
           user_id?: string
           response?: 'accepted' | 'declined' | 'uncertain'
           previous_response?: 'accepted' | 'declined' | 'uncertain' | null
+          host_offer?: boolean
           updated_at?: string
         }
         Relationships: []

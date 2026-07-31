@@ -36,9 +36,10 @@ interface DemoEvent {
   until_time: string | null
   min_participants: number
   proposed_by: string
+  host_user_id: string | null
   notes: string | null
   profiles: { display_name: string }
-  event_responses: Array<{ user_id: string; response: ResponseType; profiles: { display_name: string }; previous_response?: ResponseType | null }>
+  event_responses: Array<{ user_id: string; response: ResponseType; host_offer?: boolean; profiles: { display_name: string }; previous_response?: ResponseType | null }>
   event_games: Array<{ id: string; name: string; thumbnail_url: string | null }>
 }
 
@@ -123,15 +124,17 @@ const initialEvents: DemoEvent[] = [
     from_time: '18:00',
     until_time: '22:30',
     min_participants: 3,
-    proposed_by: 'u2',
+    // In der Demo ist der aktuelle User (u1/Mara) Initiator, damit die Host-Auswahl testbar ist.
+    proposed_by: 'u1',
+    host_user_id: null,
     notes: 'Spieleabend mit etwas mehr Zeit',
-    profiles: { display_name: 'Noah' },
+    profiles: { display_name: 'Mara' },
     event_responses: [
-      { user_id: 'u5', response: 'accepted', profiles: { display_name: 'Tina' } },
-      { user_id: 'u4', response: 'accepted', profiles: { display_name: 'Tim' } },
+      { user_id: 'u5', response: 'accepted', host_offer: true, profiles: { display_name: 'Tina' } },
+      { user_id: 'u4', response: 'accepted', host_offer: false, profiles: { display_name: 'Tim' } },
       { user_id: 'u2', response: 'declined', profiles: { display_name: 'Timur' } },
       { user_id: 'u3', response: 'uncertain', profiles: { display_name: 'Lina' } },
-      { user_id: 'u1', response: 'uncertain', profiles: { display_name: 'Mara' } },
+      { user_id: 'u1', response: 'uncertain', host_offer: false, profiles: { display_name: 'Mara' } },
     ],
     event_games: [
       { id: 'g-catan', name: 'Catan', thumbnail_url: null },
@@ -145,12 +148,13 @@ const initialEvents: DemoEvent[] = [
     until_time: '23:00',
     min_participants: 3,
     proposed_by: 'u3',
+    host_user_id: 'u5',
     notes: 'Schon genug Zusagen',
     profiles: { display_name: 'Lina' },
     event_responses: [
-      { user_id: 'u5', response: 'accepted', profiles: { display_name: 'Tina' } },
-      { user_id: 'u4', response: 'accepted', profiles: { display_name: 'Tim' } },
-      { user_id: 'u2', response: 'accepted', profiles: { display_name: 'Timur' } },
+      { user_id: 'u5', response: 'accepted', host_offer: true, profiles: { display_name: 'Tina' } },
+      { user_id: 'u4', response: 'accepted', host_offer: false, profiles: { display_name: 'Tim' } },
+      { user_id: 'u2', response: 'accepted', host_offer: true, profiles: { display_name: 'Timur' } },
       { user_id: 'u3', response: 'uncertain', profiles: { display_name: 'Lina' } },
       { user_id: 'u1', response: 'declined', profiles: { display_name: 'Mara' } },
     ],
@@ -287,19 +291,55 @@ export default function TourTestgruppeClient() {
         return {
           ...entry,
           response,
+          host_offer: response === 'accepted' ? (entry.host_offer ?? false) : false,
           previous_response: previousResponse,
         }
       })
       const acceptedCount = nextResponses.filter((entry) => entry.response === 'accepted').length
       const nextStatus: DemoEvent['status'] = acceptedCount >= event.min_participants ? 'confirmed' : 'voting'
+      const hostStillEligible = nextResponses.some((entry) => entry.user_id === event.host_user_id && entry.response === 'accepted' && entry.host_offer)
 
       return {
         ...event,
         status: nextStatus,
+        host_user_id: hostStillEligible ? event.host_user_id : null,
         event_responses: nextResponses,
       }
     }))
     setSavingResponse(null)
+  }
+
+  const updateHostOffer = (offered: boolean) => {
+    if (!currentVoting) return
+    setEvents((prev) => prev.map((event) => {
+      if (event.id !== currentVoting.id) return event
+
+      const nextResponses: DemoEvent['event_responses'] = event.event_responses.map((entry) => {
+        if (entry.user_id !== 'u1') return entry
+        if (entry.response !== 'accepted') return entry
+        return {
+          ...entry,
+          host_offer: offered,
+        }
+      })
+
+      const hostStillEligible = nextResponses.some((entry) => entry.user_id === event.host_user_id && entry.response === 'accepted' && entry.host_offer)
+      return {
+        ...event,
+        event_responses: nextResponses,
+        host_user_id: hostStillEligible ? event.host_user_id : null,
+      }
+    }))
+  }
+
+  const selectHost = (eventId: string, hostUserId: string) => {
+    setEvents((prev) => prev.map((event) => {
+      if (event.id !== eventId) return event
+      return {
+        ...event,
+        host_user_id: hostUserId,
+      }
+    }))
   }
 
   const nextTab = () => {
@@ -354,7 +394,11 @@ export default function TourTestgruppeClient() {
             {votingEvents.map((event) => {
               const acceptedCount = event.event_responses.filter((entry) => entry.response === 'accepted').length
               const currentUser = event.event_responses.find((entry) => entry.user_id === 'u1')?.response ?? 'uncertain'
+              const currentUserHostOffer = event.event_responses.find((entry) => entry.user_id === 'u1')?.host_offer === true
               const isConfirmed = event.status === 'confirmed'
+              const isInitiator = event.proposed_by === 'u1'
+              const hostCandidates = event.event_responses.filter((entry) => entry.response === 'accepted' && entry.host_offer)
+              const selectedHostName = members.find((member) => member.user_id === event.host_user_id)?.display_name ?? null
 
               return (
                 <Card key={event.id}>
@@ -370,6 +414,7 @@ export default function TourTestgruppeClient() {
                     </p>
                     <p className="text-xs text-muted-foreground">Vorgeschlagen von {event.profiles.display_name}</p>
                     {event.notes && <p className="text-xs text-muted-foreground italic">{event.notes}</p>}
+                    {selectedHostName && <p className="text-xs text-green-700">Gastgeber: {selectedHostName}</p>}
                   </CardHeader>
                   <CardContent className="space-y-3">
                     {event.event_games.length > 0 && (
@@ -434,6 +479,46 @@ export default function TourTestgruppeClient() {
                         )
                       })}
                     </div>
+
+                    {currentUser === 'accepted' && (
+                      <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={currentUserHostOffer}
+                          onChange={(event) => updateHostOffer(event.target.checked)}
+                          className="h-4 w-4"
+                        />
+                        Als Gastgeber anbieten
+                      </label>
+                    )}
+
+                    {hostCandidates.length > 0 && (
+                      <div className="space-y-2 rounded-md border border-border px-3 py-2">
+                        <p className="text-xs font-medium text-muted-foreground">Mögliche Gastgeber</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {hostCandidates.map((candidate) => {
+                            const active = event.host_user_id === candidate.user_id
+                            return (
+                              <button
+                                key={candidate.user_id}
+                                type="button"
+                                onClick={() => isInitiator && selectHost(event.id, candidate.user_id)}
+                                disabled={!isInitiator}
+                                className={active
+                                  ? 'rounded-full border border-green-600 bg-green-500 px-2.5 py-1 text-xs text-white'
+                                  : 'rounded-full border border-green-300 bg-background px-2.5 py-1 text-xs text-green-700'}
+                                title={isInitiator ? 'Als Gastgeber festlegen' : 'Nur der Initiator kann auswählen'}
+                              >
+                                {candidate.profiles.display_name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        {!isInitiator && (
+                          <p className="text-xs text-muted-foreground">Nur der Initiator kann den Gastgeber festlegen.</p>
+                        )}
+                      </div>
+                    )}
 
                     {isConfirmed && (
                       <p className="text-xs text-green-700 rounded-md bg-green-50 border border-green-200 px-3 py-2">

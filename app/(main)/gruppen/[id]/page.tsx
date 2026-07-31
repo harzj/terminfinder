@@ -72,7 +72,8 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   // Aktive Events der Gruppe laden (inkl. cancelled, damit sie sichtbar bleiben)
   const { data: events } = await supabase
     .from('events')
-    .select('*, profiles(display_name), event_responses(user_id, response, previous_response, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
+    // host_user_id und host_offer werden für die Gastgeberauswahl in Abstimmungen benötigt.
+    .select('*, profiles(display_name), event_responses(user_id, response, previous_response, host_offer, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
     .in('status', ['voting', 'confirmed', 'cancelled'])
     .gte('proposed_date', todayStr)
@@ -115,7 +116,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   // Vergangene bestätigte Termine (Archiv)
   const { data: pastEvents } = await supabase
     .from('events')
-    .select('id, proposed_date, from_time, until_time, event_responses(response, user_id), event_games(id, bgg_id, name, thumbnail_url, added_by)')
+    .select('id, proposed_date, from_time, until_time, host_user_id, event_responses(response, user_id, host_offer), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
     .eq('status', 'confirmed')
     .lt('proposed_date', todayStr)

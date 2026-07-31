@@ -85,6 +85,14 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   const [allGameResults, setAllGameResults] = useState<BggSearchItem[]>([])
   const [searchingAllGames, setSearchingAllGames] = useState(false)
 
+  // Für Gastgeber-Anzeige Namen per user_id auflösen.
+  const memberNameById = new Map(
+    (members ?? []).map((m: any) => [
+      m.user_id,
+      m.display_name ?? m.profiles?.display_name ?? m.email?.split('@')[0] ?? 'Unbekannt',
+    ])
+  )
+
   const hasPublicProfileCollection = Boolean(bggUsername?.trim()) && (bggCollection?.length ?? 0) > 0
 
   useEffect(() => {
@@ -164,7 +172,7 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
     // Fetch current response to track changes away from 'accepted'
     const { data: currentRaw } = await supabase
       .from('event_responses')
-      .select('response, previous_response')
+      .select('response, previous_response, host_offer')
       .eq('event_id', eventId)
       .eq('user_id', currentUserId)
       .maybeSingle()
@@ -180,13 +188,85 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
       newPreviousResponse = current?.previous_response ?? null  // preserve existing flag
     }
 
+    const nextHostOffer = response === 'accepted' ? (current?.host_offer ?? false) : false
+
     await supabase.from('event_responses').upsert(
-      { event_id: eventId, user_id: currentUserId, response, previous_response: newPreviousResponse, updated_at: new Date().toISOString() },
+      {
+        event_id: eventId,
+        user_id: currentUserId,
+        response,
+        previous_response: newPreviousResponse,
+        host_offer: nextHostOffer,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: 'event_id,user_id' }
     )
+
+    // Falls ein gesetzter Gastgeber nicht mehr zugesagt hat, Auswahl zurücksetzen.
+    const eventEntry = events.find((e: any) => e.id === eventId)
+    if (eventEntry?.host_user_id === currentUserId && response !== 'accepted') {
+      await supabase
+        .from('events')
+        .update({ host_user_id: null })
+        .eq('id', eventId)
+    }
+
     // Push-Benachrichtigungen feuern (fire-and-forget)
     fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId, type: 'vote_success_check' }) })
     fetch('/api/push/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId, type: 'change_check' }) })
+    setLoading(null)
+    router.refresh()
+  }
+
+  const handleHostOfferToggle = async (eventId: string, offered: boolean) => {
+    const loadingKey = `host-offer-${eventId}`
+    setLoading(loadingKey)
+    const supabase = createClient()
+
+    await supabase
+      .from('event_responses')
+      .upsert(
+        {
+          event_id: eventId,
+          user_id: currentUserId,
+          response: 'accepted',
+          host_offer: offered,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'event_id,user_id' }
+      )
+
+    // Wenn die eigene Gastgeber-Bereitschaft zurückgenommen wird, ggf. finale Auswahl leeren.
+    if (!offered) {
+      const eventEntry = events.find((e: any) => e.id === eventId)
+      if (eventEntry?.host_user_id === currentUserId) {
+        await supabase
+          .from('events')
+          .update({ host_user_id: null })
+          .eq('id', eventId)
+      }
+    }
+
+    setLoading(null)
+    router.refresh()
+  }
+
+  const handleSelectHost = async (eventId: string, hostUserId: string) => {
+    const eventEntry = events.find((e: any) => e.id === eventId)
+    const isEligible = Boolean(
+      eventEntry?.event_responses?.some((r: any) => r.user_id === hostUserId && r.response === 'accepted' && r.host_offer === true)
+    )
+    if (!isEligible) return
+
+    const loadingKey = `host-select-${eventId}-${hostUserId}`
+    setLoading(loadingKey)
+    const supabase = createClient()
+
+    await supabase
+      .from('events')
+      .update({ host_user_id: hostUserId })
+      .eq('id', eventId)
+
     setLoading(null)
     router.refresh()
   }
@@ -421,6 +501,10 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         const accepted = event.event_responses?.filter((r: any) => r.response === 'accepted') ?? []
         const declined = event.event_responses?.filter((r: any) => r.response === 'declined') ?? []
         const uncertain = event.event_responses?.filter((r: any) => r.response === 'uncertain') ?? []
+        const hostCandidates = accepted.filter((r: any) => r.host_offer === true)
+        const selectedHostId: string | null = event.host_user_id ?? null
+        const selectedHostName = selectedHostId ? (memberNameById.get(selectedHostId) ?? 'Unbekannt') : null
+        const isInitiator = event.proposed_by === currentUserId
         const games = event.event_games ?? []
         const isThresholdMet = accepted.length >= event.min_participants
         const canStillSucceed = (accepted.length + uncertain.length) >= event.min_participants
@@ -594,6 +678,57 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
                   )
                 })}
               </div>}
+
+              {/* Gastgeber-Angebot: nur bei eigener Zusage sichtbar */}
+              {!isCancelled && myResponse?.response === 'accepted' && (
+                <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={myResponse?.host_offer === true}
+                    onChange={(e) => void handleHostOfferToggle(event.id, e.target.checked)}
+                    disabled={loading !== null}
+                    className="h-4 w-4"
+                  />
+                  Als Gastgeber anbieten
+                </label>
+              )}
+
+              {/* Gastgeber-Auswahl: Kandidaten werden als Buttons angezeigt, Auswahl nur durch Initiator */}
+              {hostCandidates.length > 0 && (
+                <div className="space-y-2 rounded-md border border-border px-3 py-2">
+                  <p className="text-xs font-medium text-muted-foreground">Mögliche Gastgeber</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {hostCandidates.map((candidate: any) => {
+                      const isSelected = selectedHostId === candidate.user_id
+                      const isPicking = loading === `host-select-${event.id}-${candidate.user_id}`
+                      return (
+                        <button
+                          key={candidate.user_id}
+                          type="button"
+                          onClick={() => isInitiator && void handleSelectHost(event.id, candidate.user_id)}
+                          disabled={!isInitiator || loading !== null}
+                          className={cn(
+                            'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                            isSelected
+                              ? 'border-green-600 bg-green-500 text-white'
+                              : 'border-green-300 text-green-700 bg-background',
+                            !isInitiator && 'opacity-70 cursor-default'
+                          )}
+                          title={isInitiator ? 'Als Gastgeber festlegen' : 'Nur der Initiator kann auswählen'}
+                        >
+                          {isPicking ? '…' : (candidate.profiles?.display_name ?? memberNameById.get(candidate.user_id) ?? 'Unbekannt')}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedHostName && (
+                    <p className="text-xs text-green-700">Festgelegt: {selectedHostName}</p>
+                  )}
+                  {!isInitiator && (
+                    <p className="text-xs text-muted-foreground">Nur der Initiator der Abstimmung kann den Gastgeber festlegen.</p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )
