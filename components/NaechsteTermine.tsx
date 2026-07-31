@@ -27,12 +27,13 @@ interface Props {
   currentUserId: string
   events: any[]
   blockedDates?: string[]
+  betterGroupByDate?: Record<string, string>
   bggUsername?: string | null
   bggCollection?: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
   readOnly?: boolean
 }
 
-export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events, blockedDates, bggUsername, bggCollection, readOnly = false }: Props) {
+export default function NaechsteTermine({ group, availabilities, members, startDate, endDate, currentUserId, events, blockedDates, betterGroupByDate, bggUsername, bggCollection, readOnly = false }: Props) {
   const router = useRouter()
 
   // Dialog-State für den Vorschlagen-Dialog
@@ -252,6 +253,11 @@ export default function NaechsteTermine({ group, availabilities, members, startD
               <p className="text-xs text-muted-foreground">
                 {overlap.from_time} – {overlap.until_time} Uhr
               </p>
+              {betterGroupByDate?.[overlap.date] && (
+                <p className="text-xs text-amber-700">
+                  Bei Gruppe {betterGroupByDate[overlap.date]} gibt es mehr Zusagen.
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-2">
               <div className="flex flex-wrap gap-1 items-center">

@@ -24,12 +24,13 @@ interface Props {
   startDate: string
   endDate: string
   blockedDates: string[]
+  betterGroupByDate: Record<string, string>
   bggUsername: string | null
   bggCollection: Array<{ id: number; name: string; thumbnail_url: string | null }> | null
 }
 
 export default function GruppenDetailClient({
-  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, bggUsername, bggCollection
+  group, members, availabilities, events, pastEvents, currentUserId, startDate, endDate, blockedDates, betterGroupByDate, bggUsername, bggCollection
 }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -157,6 +158,7 @@ export default function GruppenDetailClient({
             currentUserId={currentUserId}
             events={events}
             blockedDates={blockedDates}
+            betterGroupByDate={betterGroupByDate}
             bggUsername={bggUsername}
             bggCollection={bggCollection}
           />
