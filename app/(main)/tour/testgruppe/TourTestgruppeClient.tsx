@@ -252,11 +252,19 @@ export default function TourTestgruppeClient() {
     setEvents((prev) => prev.map((event) => {
       if (event.id !== currentVoting.id) return event
 
-      const nextResponses = event.event_responses.map((entry) => (
-        entry.user_id === 'u1'
-          ? { ...entry, response, previous_response: entry.response === 'accepted' && response !== 'accepted' ? 'accepted' : null }
-          : entry
-      ))
+      const nextResponses: DemoEvent['event_responses'] = event.event_responses.map((entry) => {
+        if (entry.user_id !== 'u1') return entry
+
+        const previousResponse: ResponseType | null = entry.response === 'accepted' && response !== 'accepted'
+          ? 'accepted'
+          : null
+
+        return {
+          ...entry,
+          response,
+          previous_response: previousResponse,
+        }
+      })
       const acceptedCount = nextResponses.filter((entry) => entry.response === 'accepted').length
       const nextStatus: DemoEvent['status'] = acceptedCount >= event.min_participants ? 'confirmed' : 'voting'
 
