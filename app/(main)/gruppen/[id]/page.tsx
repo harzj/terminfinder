@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import GruppenDetailClient from './GruppenDetailClient'
+import { clampPlanningMonths, getPlanningRangeFromMonday, toLocalDateString } from '@/lib/planningWindow'
 
 export default async function GruppenDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -36,7 +37,7 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   const memberIds = (rawMembers ?? []).map((m: any) => m.user_id).filter(Boolean)
 
   const { data: profileData } = memberIds.length > 0
-    ? await supabase.from('profiles').select('id, display_name, bgg_username, bgg_collection').in('id', memberIds)
+    ? await supabase.from('profiles').select('id, display_name, bgg_username, bgg_collection, availability_planning_months').in('id', memberIds)
     : { data: [] as any[] }
   const profileMap = new Map((profileData ?? []).map((p: any) => [p.id, p]))
   const members = (rawMembers ?? []).map((m: any) => ({
@@ -49,18 +50,17 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
   const bggCollection: Array<{ id: number; name: string; thumbnail_url: string | null }> | null =
     Array.isArray(currentUserProfile?.bgg_collection) ? currentUserProfile.bgg_collection : null
 
-  // Verfügbarkeiten aller Mitglieder: 5 Wochen ab Montag der aktuellen Woche (synchron mit Verfügbarkeitskalender)
+  // Verfügbarkeiten aller Mitglieder: Maximaler Planungshorizont der Gruppe.
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split('T')[0]
-  const dayOfWeek = today.getDay()
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-  const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() + daysToMonday)
-  const startStr = weekStart.toISOString().split('T')[0]
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekStart.getDate() + 34)
-  const endStr = weekEnd.toISOString().split('T')[0]
+  const todayStr = toLocalDateString(today)
+  const maxPlanningMonths = Math.max(
+    1,
+    ...(profileData ?? []).map((p: any) => clampPlanningMonths(p.availability_planning_months))
+  )
+  const { startDate, endDate } = getPlanningRangeFromMonday(maxPlanningMonths, today)
+  const startStr = toLocalDateString(startDate)
+  const endStr = toLocalDateString(endDate)
 
   const { data: availabilities } = await supabase
     .from('availability')

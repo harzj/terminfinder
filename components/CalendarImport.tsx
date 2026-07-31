@@ -17,6 +17,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   startDate: string          // Montag der aktuellen Woche (yyyy-MM-dd)
   todayStr: string
+  totalDays?: number
   existingAvailability: DayAvailability[]
   initialUrl?: string | null
   initialUrls?: string[]
@@ -186,7 +187,7 @@ function applyFilter(days: PreviewDay[], mode: FilterMode): PreviewDay[] {
 
 
 export default function CalendarImport({
-  open, onOpenChange, startDate, todayStr, existingAvailability, initialUrl, initialUrls, autoLoadInitialUrl = false, defaultTimes, onImport,
+  open, onOpenChange, startDate, todayStr, totalDays = 35, existingAvailability, initialUrl, initialUrls, autoLoadInitialUrl = false, defaultTimes, onImport,
 }: Props) {
   const normalizedInitialUrls = Array.from(new Set([
     ...(initialUrls ?? []).map((v) => v.trim()).filter(Boolean),
@@ -224,7 +225,8 @@ export default function CalendarImport({
     }
     const weekStart = parseISO(startDate)
     const today = parseISO(todayStr)
-    const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i)).filter(d => d >= today)
+    // Vorschau nur innerhalb des konfigurierten Planungshorizonts.
+    const days = Array.from({ length: totalDays }, (_, i) => addDays(weekStart, i)).filter(d => d >= today)
     const result: PreviewDay[] = []
 
     for (const day of days) {

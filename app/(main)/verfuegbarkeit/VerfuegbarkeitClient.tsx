@@ -20,13 +20,14 @@ interface Props {
   userId: string
   startDate: string   // Montag der aktuellen Woche
   todayStr: string    // heutiges Datum
+  totalDays: number
   initialAvailability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
   defaultTimes?: DefaultTimes | null
   calendarImportUrl?: string | null
 }
 
-export default function VerfuegbarkeitClient({ userId, startDate, todayStr, initialAvailability, confirmedEvents, defaultTimes, calendarImportUrl }: Props) {
+export default function VerfuegbarkeitClient({ userId, startDate, todayStr, totalDays, initialAvailability, confirmedEvents, defaultTimes, calendarImportUrl }: Props) {
   const [availability, setAvailability] = useState<DayAvailability[]>(initialAvailability)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
@@ -146,6 +147,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
       <AvailabilityCalendar
         startDate={startDate}
         todayStr={todayStr}
+        totalDays={totalDays}
         availability={availability}
         confirmedEvents={confirmedEvents}
         onSave={handleSave}
@@ -181,6 +183,7 @@ export default function VerfuegbarkeitClient({ userId, startDate, todayStr, init
         }}
         startDate={startDate}
         todayStr={todayStr}
+        totalDays={totalDays}
         existingAvailability={availability}
         initialUrl={selectedImportUrl}
         initialUrls={importUrls}

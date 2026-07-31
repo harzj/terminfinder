@@ -5,6 +5,7 @@ import { parseICSEvents, BusyEvent } from '@/lib/ics'
 import { getTimesForDate, DefaultTimes } from '@/lib/holidays'
 import { addDays, format, parseISO } from 'date-fns'
 import { decryptUrl } from '@/lib/encryption'
+import { clampPlanningMonths, getPlanningRangeFromMonday, toLocalDateString } from '@/lib/planningWindow'
 
 // ── Admin client (umgeht RLS für Cross-User-Batch) ─────────────────────────
 function getAdminClient() {
@@ -121,6 +122,7 @@ async function runAutoSyncForUser(
   userId: string,
   autoSyncUrls: string[],
   minDistanceHours: number,
+  planningMonths: number,
   defaultTimes: DefaultTimes | null,
   admin: ReturnType<typeof getAdminClient>
 ): Promise<{ changed: number; skipped: number }> {
@@ -142,14 +144,13 @@ async function runAutoSyncForUser(
     }
   }
 
-  // Build 5-week window starting today
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const days = Array.from({ length: 35 }, (_, i) => addDays(today, i))
+  // Fensterlänge orientiert sich an der Profil-Einstellung (1-6 Monate).
+  const { startDate: weekStart, totalDays } = getPlanningRangeFromMonday(planningMonths)
+  const days = Array.from({ length: totalDays }, (_, i) => addDays(weekStart, i))
 
   // Load all existing sync states for this user in the window
-  const startStr = format(today, 'yyyy-MM-dd')
-  const endStr = format(days[34], 'yyyy-MM-dd')
+  const startStr = toLocalDateString(weekStart)
+  const endStr = format(days[days.length - 1], 'yyyy-MM-dd')
 
   const { data: existingStates } = await admin
     .from('calendar_sync_state')
@@ -311,7 +312,7 @@ export async function GET(req: NextRequest) {
   // Load all users with auto_sync_enabled = true
   const { data: profiles, error } = await admin
     .from('profiles')
-    .select('id, auto_sync_urls, auto_sync_min_distance_hours, default_availability_times')
+    .select('id, auto_sync_urls, auto_sync_min_distance_hours, default_availability_times, availability_planning_months')
     .eq('auto_sync_enabled', true)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -321,12 +322,14 @@ export async function GET(req: NextRequest) {
   for (const profile of profiles ?? []) {
     const urls = ((profile.auto_sync_urls as string[] | null) ?? []).map(u => decryptUrl(u as string)).filter(Boolean)
     const minDistance = profile.auto_sync_min_distance_hours ?? 3
+    const planningMonths = clampPlanningMonths(profile.availability_planning_months)
     const defaultTimes = (profile.default_availability_times as DefaultTimes | null) ?? null
 
     results[profile.id] = await runAutoSyncForUser(
       profile.id,
       urls,
       minDistance,
+      planningMonths,
       defaultTimes,
       admin
     )

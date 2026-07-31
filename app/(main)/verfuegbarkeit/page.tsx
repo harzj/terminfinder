@@ -10,6 +10,7 @@ import LaufendeAbstimmungen from './LaufendeAbstimmungen'
 import { DefaultTimes } from '@/lib/holidays'
 import { decryptUrl } from '@/lib/encryption'
 import PushActivationButton from '../PushActivationButton'
+import { clampPlanningMonths, getPlanningRangeFromMonday, toLocalDateString } from '@/lib/planningWindow'
 
 export default async function VerfuegbarkeitPage() {
   const supabase = await createClient()
@@ -20,18 +21,19 @@ export default async function VerfuegbarkeitPage() {
   // Heutiges Datum + Montag der aktuellen Woche
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = toLocalDateString(today)
 
-  const dayOfWeek = today.getDay() // 0=So, 1=Mo, ...
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-  const weekStart = new Date(today)
-  weekStart.setDate(today.getDate() + daysToMonday)
-  const weekStartStr = weekStart.toISOString().split('T')[0]
+  // Profil inklusive Planungshorizont laden.
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('default_availability_times, calendar_import_url, availability_planning_months')
+    .eq('id', user.id)
+    .single()
 
-  // 5 volle Wochen = 35 Tage
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekStart.getDate() + 34)
-  const weekEndStr = weekEnd.toISOString().split('T')[0]
+  const planningMonths = clampPlanningMonths(profileData?.availability_planning_months)
+  const { startDate, endDate, totalDays } = getPlanningRangeFromMonday(planningMonths, today)
+  const weekStartStr = toLocalDateString(startDate)
+  const weekEndStr = toLocalDateString(endDate)
 
   // Verfügbarkeit für das gesamte 5-Wochen-Fenster laden
   const { data: availability } = await supabase
@@ -57,11 +59,6 @@ export default async function VerfuegbarkeitPage() {
   })
 
   // Standard-Uhrzeiten aus Profil
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('default_availability_times, calendar_import_url')
-    .eq('id', user.id)
-    .single()
   const defaultTimes = (profileData?.default_availability_times as DefaultTimes | null) ?? null
   const calendarImportUrl = profileData?.calendar_import_url
     ? decryptUrl(profileData.calendar_import_url)
@@ -190,6 +187,7 @@ export default async function VerfuegbarkeitPage() {
           userId={user.id}
           startDate={weekStartStr}
           todayStr={todayStr}
+          totalDays={totalDays}
           initialAvailability={availability ?? []}
           confirmedEvents={calendarEvents}
           defaultTimes={defaultTimes}

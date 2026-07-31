@@ -26,6 +26,7 @@ export interface ConfirmedEvent {
 interface AvailabilityCalendarProps {
   startDate: string   // Montag der aktuellen Woche
   todayStr: string    // heutiges Datum
+  totalDays?: number  // Standard: 35 (5 Wochen)
   availability: DayAvailability[]
   confirmedEvents: ConfirmedEvent[]
   onSave: (day: DayAvailability) => Promise<void>
@@ -57,6 +58,7 @@ const LONG_PRESS_MS = 500
 export default function AvailabilityCalendar({
   startDate,
   todayStr,
+  totalDays = 35,
   availability,
   confirmedEvents,
   onSave,
@@ -66,7 +68,8 @@ export default function AvailabilityCalendar({
 }: AvailabilityCalendarProps) {
   const weekStart = parseISO(startDate)   // Montag der aktuellen Woche
   const today = parseISO(todayStr)
-  const days = Array.from({ length: 35 }, (_, i) => addDays(weekStart, i))
+  // Anzahl der sichtbaren Tage ist profilabhängig (1-6 Monate).
+  const days = Array.from({ length: totalDays }, (_, i) => addDays(weekStart, i))
 
   const [sheetDate, setSheetDate] = useState<Date | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -191,7 +194,7 @@ export default function AvailabilityCalendar({
       : HOURS_DEFAULT.map(formatHour)
 
   const weeks: Date[][] = []
-  for (let i = 0; i < 35; i += 7) weeks.push(days.slice(i, i + 7))
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
 
   const sheetAvail = sheetDate ? getAvailability(sheetDate) : undefined
 

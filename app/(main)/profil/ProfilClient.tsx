@@ -12,6 +12,7 @@ import CalendarImport from '@/components/CalendarImport'
 import { DayAvailability } from '@/components/AvailabilityCalendar'
 import { DefaultTimes } from '@/lib/holidays'
 import { Badge } from '@/components/ui/badge'
+import { clampPlanningMonths } from '@/lib/planningWindow'
 
 function parseImportUrls(raw: string | null): string[] {
   const items = (raw ?? '')
@@ -34,7 +35,7 @@ interface Membership {
 }
 
 interface Props {
-  profile: { id: string; display_name: string; bgg_username: string | null }
+  profile: { id: string; display_name: string; bgg_username: string | null; availability_planning_months?: number | null }
   email: string
   memberships: Membership[]
   bggCollectionCount: number
@@ -47,13 +48,16 @@ interface Props {
   autoSyncEnabled: boolean
   autoSyncUrls: string[]
   autoSyncMinDistance: number
+  planningMonths: number
 }
 
-export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl, startDate, todayStr, initialAvailability, autoSyncEnabled: initialAutoSyncEnabled, autoSyncUrls: initialAutoSyncUrls, autoSyncMinDistance: initialAutoSyncMinDistance }: Props) {
+export default function ProfilClient({ profile, email, memberships, bggCollectionCount, defaultTimes, calendarToken, calendarImportUrl: initialImportUrl, startDate, todayStr, initialAvailability, autoSyncEnabled: initialAutoSyncEnabled, autoSyncUrls: initialAutoSyncUrls, autoSyncMinDistance: initialAutoSyncMinDistance, planningMonths }: Props) {
   const router = useRouter()
 
   const [displayName, setDisplayName] = useState(profile.display_name)
   const [bggUsername, setBggUsername] = useState(profile.bgg_username ?? '')
+  // Separater Planungshorizont für den Verfügbarkeitskalender (1-6 Monate).
+  const [availabilityPlanningMonths, setAvailabilityPlanningMonths] = useState(clampPlanningMonths(planningMonths))
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
 
@@ -204,7 +208,11 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     const supabase = createClient()
     await supabase
       .from('profiles')
-      .update({ display_name: displayName.trim(), bgg_username: bggUsername.trim() || null })
+      .update({
+        display_name: displayName.trim(),
+        bgg_username: bggUsername.trim() || null,
+        availability_planning_months: clampPlanningMonths(availabilityPlanningMonths),
+      })
       .eq('id', profile.id)
     setSavingProfile(false)
     setProfileSaved(true)
@@ -364,6 +372,22 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
             />
             <p className="text-xs text-muted-foreground">
               Wird verwendet, um deine BGG-Sammlung beim Spieleintrag zu laden.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="planningMonths">Planung in die Zukunft</Label>
+            <select
+              id="planningMonths"
+              value={availabilityPlanningMonths}
+              onChange={(e) => setAvailabilityPlanningMonths(clampPlanningMonths(Number(e.target.value)))}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              {[1, 2, 3, 4, 5, 6].map((m) => (
+                <option key={m} value={m}>{m} {m === 1 ? 'Monat' : 'Monate'}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Sichtbar sind dann aktuelle Woche + {4 * availabilityPlanningMonths} Wochen ({1 + 4 * availabilityPlanningMonths} Wochen gesamt).
             </p>
           </div>
           <Button

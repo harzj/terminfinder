@@ -16,6 +16,7 @@ export interface Database {
           bgg_username: string | null
           bgg_collection: Json | null
           default_availability_times: Json | null
+          availability_planning_months: number
           created_at: string
           calendar_token: string
           calendar_import_url: string | null
@@ -29,6 +30,7 @@ export interface Database {
           bgg_username?: string | null
           bgg_collection?: Json | null
           default_availability_times?: Json | null
+          availability_planning_months?: number
           created_at?: string
           calendar_token?: string
           calendar_import_url?: string | null
@@ -42,6 +44,7 @@ export interface Database {
           bgg_username?: string | null
           bgg_collection?: Json | null
           default_availability_times?: Json | null
+          availability_planning_months?: number
           created_at?: string
           calendar_token?: string
           calendar_import_url?: string | null
