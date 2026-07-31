@@ -308,14 +308,21 @@ export default function ProfilClient({ profile, email, memberships, bggCollectio
     const confirmed = window.confirm('Soll die Tour neu gestartet werden?')
     if (!confirmed) return
     setResettingTour(true)
-    await fetch('/api/profile/onboarding-tour', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seen: false }),
-    })
-    setResettingTour(false)
-    router.push('/verfuegbarkeit')
-    router.refresh()
+    try {
+      const response = await fetch('/api/profile/onboarding-tour', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seen: false }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Tour-Reset fehlgeschlagen (${response.status})`)
+      }
+
+      window.location.assign('/verfuegbarkeit')
+    } finally {
+      setResettingTour(false)
+    }
   }
 
   const updateImportUrl = (index: number, value: string) => {
