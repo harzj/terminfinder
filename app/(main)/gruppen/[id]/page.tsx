@@ -69,15 +69,37 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
     .gte('date', startStr)
     .lte('date', endStr)
 
-  // Aktive Events der Gruppe laden (inkl. cancelled, damit sie sichtbar bleiben)
-  const { data: events } = await supabase
+  // Aktive Events der Gruppe laden (inkl. cancelled, damit sie sichtbar bleiben).
+  // Fallback ohne Host-Felder, falls die Migration auf der Ziel-DB noch nicht aktiv ist.
+  const eventsQuery = await supabase
     .from('events')
-    // host_user_id und host_offer werden für die Gastgeberauswahl in Abstimmungen benötigt.
     .select('*, profiles(display_name), event_responses(user_id, response, previous_response, host_offer, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
     .in('status', ['voting', 'confirmed', 'cancelled'])
     .gte('proposed_date', todayStr)
     .order('proposed_date')
+
+  const needsHostFallback = Boolean(
+    eventsQuery.error && /host_offer|host_user_id/i.test(eventsQuery.error.message)
+  )
+
+  const events = needsHostFallback
+    ? (await supabase
+        .from('events')
+        .select('*, profiles(display_name), event_responses(user_id, response, previous_response, profiles(display_name)), event_games(id, bgg_id, name, thumbnail_url, added_by)')
+        .eq('group_id', id)
+        .in('status', ['voting', 'confirmed', 'cancelled'])
+        .gte('proposed_date', todayStr)
+        .order('proposed_date')
+      ).data?.map((event: any) => ({
+        ...event,
+        host_user_id: null,
+        event_responses: (event.event_responses ?? []).map((response: any) => ({
+          ...response,
+          host_offer: false,
+        })),
+      }))
+    : eventsQuery.data
 
   // Blockierte Tage: zugesagte Events in ANDEREN Gruppen (laufende Abstimmung oder bestätigt)
   const { data: otherMemberships } = await supabase
@@ -113,8 +135,8 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
       .map((r: any) => r.events.proposed_date as string)
   }
 
-  // Vergangene bestätigte Termine (Archiv)
-  const { data: pastEvents } = await supabase
+  // Vergangene bestätigte Termine (Archiv), ebenfalls mit Fallback.
+  const pastEventsQuery = await supabase
     .from('events')
     .select('id, proposed_date, from_time, until_time, host_user_id, event_responses(response, user_id, host_offer), event_games(id, bgg_id, name, thumbnail_url, added_by)')
     .eq('group_id', id)
@@ -122,6 +144,29 @@ export default async function GruppenDetailPage({ params }: { params: Promise<{ 
     .lt('proposed_date', todayStr)
     .order('proposed_date', { ascending: false })
     .limit(30)
+
+  const needsPastHostFallback = Boolean(
+    pastEventsQuery.error && /host_offer|host_user_id/i.test(pastEventsQuery.error.message)
+  )
+
+  const pastEvents = needsPastHostFallback
+    ? (await supabase
+        .from('events')
+        .select('id, proposed_date, from_time, until_time, event_responses(response, user_id), event_games(id, bgg_id, name, thumbnail_url, added_by)')
+        .eq('group_id', id)
+        .eq('status', 'confirmed')
+        .lt('proposed_date', todayStr)
+        .order('proposed_date', { ascending: false })
+        .limit(30)
+      ).data?.map((event: any) => ({
+        ...event,
+        host_user_id: null,
+        event_responses: (event.event_responses ?? []).map((response: any) => ({
+          ...response,
+          host_offer: false,
+        })),
+      }))
+    : pastEventsQuery.data
 
   return (
     <GruppenDetailClient

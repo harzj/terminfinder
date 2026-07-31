@@ -54,6 +54,7 @@ function computeOverlap(availabilities: any[], date: string): { from: string; un
 export default function Abstimmungen({ group, events, currentUserId, members, availabilities, bggUsername, bggCollection }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState<string | null>(null)
+  const [hostError, setHostError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<{ id: string; label: string } | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -221,9 +222,10 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
   const handleHostOfferToggle = async (eventId: string, offered: boolean) => {
     const loadingKey = `host-offer-${eventId}`
     setLoading(loadingKey)
+    setHostError(null)
     const supabase = createClient()
 
-    await supabase
+    const { error: offerError } = await supabase
       .from('event_responses')
       .upsert(
         {
@@ -235,6 +237,12 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
         },
         { onConflict: 'event_id,user_id' }
       )
+
+    if (offerError) {
+      setLoading(null)
+      setHostError('Gastgeber-Funktion ist noch nicht vollständig aktiviert. Bitte Migrationen erneut ausführen.')
+      return
+    }
 
     // Wenn die eigene Gastgeber-Bereitschaft zurückgenommen wird, ggf. finale Auswahl leeren.
     if (!offered) {
@@ -260,12 +268,19 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
 
     const loadingKey = `host-select-${eventId}-${hostUserId}`
     setLoading(loadingKey)
+    setHostError(null)
     const supabase = createClient()
 
-    await supabase
+    const { error: hostErrorResult } = await supabase
       .from('events')
       .update({ host_user_id: hostUserId })
       .eq('id', eventId)
+
+    if (hostErrorResult) {
+      setLoading(null)
+      setHostError('Gastgeber konnte nicht gesetzt werden. Bitte Migrationen prüfen.')
+      return
+    }
 
     setLoading(null)
     router.refresh()
@@ -733,6 +748,12 @@ export default function Abstimmungen({ group, events, currentUserId, members, av
           </Card>
         )
       })}
+
+      {hostError && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {hostError}
+        </div>
+      )}
 
       <Dialog open={cancelTarget !== null} onOpenChange={(open) => { if (!open) setCancelTarget(null) }}>
         <DialogContent className="max-w-sm">
